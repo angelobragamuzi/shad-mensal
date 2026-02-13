@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, LogOut, Menu, UsersRound, X } from "lucide-react";
+import { CalendarDays, LayoutDashboard, LogOut, Menu, UsersRound, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 interface AppShellProps {
@@ -18,7 +18,8 @@ type MenuItem = {
 
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Alunos", href: "/alunos", icon: UsersRound },
+  { label: "Clientes", href: "/clientes", icon: UsersRound },
+  { label: "Calendário", href: "/calendario", icon: CalendarDays },
 ];
 
 export function AppShell({ children }: AppShellProps) {
@@ -110,8 +111,14 @@ export function AppShell({ children }: AppShellProps) {
       <div className="min-h-screen md:pl-[250px]">
         <aside className="surface hidden border-r border-white/10 md:fixed md:inset-y-4 md:left-4 md:flex md:w-[230px] md:flex-col md:rounded-2xl md:p-4">
           <div className="mb-6">
-            <p className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">ShadSolutions</p>
-            <h1 className="mt-2 text-xl font-semibold text-zinc-100">ShadMensal</h1>
+            <div className="h-20 w-[200px] overflow-hidden">
+              <img
+                src="/manager.svg"
+                alt="Shad Manager"
+                className="h-full w-full object-cover object-left"
+              />
+            </div>
+            <h1 className="sr-only">Shad Manager</h1>
           </div>
 
           <nav className="grid gap-2">
@@ -125,8 +132,8 @@ export function AppShell({ children }: AppShellProps) {
                   className={[
                     "inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition",
                     isActive
-                      ? "border-white/30 bg-white/10 text-zinc-100"
-                      : "border-transparent text-zinc-400 hover:border-white/15 hover:bg-white/5 hover:text-zinc-100",
+                      ? "border-amber-400/50 bg-amber-500/10 text-amber-100"
+                      : "border-transparent text-zinc-400 hover:border-amber-400/25 hover:bg-amber-500/5 hover:text-zinc-100",
                   ].join(" ")}
                 >
                   <Icon size={16} />
@@ -152,9 +159,15 @@ export function AppShell({ children }: AppShellProps) {
         </aside>
 
         <header className="surface sticky top-0 z-30 m-3 flex items-center justify-between rounded-2xl px-3 py-2 md:hidden">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">ShadSolutions</p>
-            <p className="text-sm font-semibold text-zinc-100">ShadMensal</p>
+          <div className="flex items-center gap-2">
+            <div className="h-14 w-[170px] overflow-hidden">
+              <img
+                src="/manager.svg"
+                alt="Shad Manager"
+                className="h-full w-full object-cover object-left"
+              />
+            </div>
+            <p className="sr-only">Shad Manager</p>
           </div>
           <button
             type="button"
@@ -178,8 +191,8 @@ export function AppShell({ children }: AppShellProps) {
                   className={[
                     "inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition",
                     isActive
-                      ? "border-white/30 bg-white/10 text-zinc-100"
-                      : "border-transparent text-zinc-400 hover:border-white/15 hover:bg-white/5 hover:text-zinc-100",
+                      ? "border-amber-400/50 bg-amber-500/10 text-amber-100"
+                      : "border-transparent text-zinc-400 hover:border-amber-400/25 hover:bg-amber-500/5 hover:text-zinc-100",
                   ].join(" ")}
                 >
                   <Icon size={16} />

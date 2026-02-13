@@ -1,11 +1,11 @@
-﻿# Supabase setup for ShadMensal
+﻿# Supabase setup for Shad Manager
 
 ## 1) Apply the migration
 
 ### Option A: Supabase SQL Editor
 1. Open your Supabase project.
 2. Go to `SQL Editor`.
-3. Paste the file `supabase/migrations/202602130001_shadmensal_init.sql`.
+3. Paste the file `supabase/migrations/202602130001_shad-manager_init.sql`.
 4. Run.
 
 ### Option B: Supabase CLI

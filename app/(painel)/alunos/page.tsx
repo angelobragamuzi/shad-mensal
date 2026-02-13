@@ -1,5 +1,5 @@
-import { AlunosView } from "@/components/alunos/alunos-view";
+import { redirect } from "next/navigation";
 
 export default function AlunosPage() {
-  return <AlunosView />;
+  redirect("/clientes");
 }

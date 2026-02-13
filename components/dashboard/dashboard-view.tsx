@@ -24,7 +24,7 @@ import {
   type InvoiceRow,
   type PaymentRow,
   type StudentRow,
-} from "@/lib/shadmensal/utils";
+} from "@/lib/shad-manager/utils";
 
 interface MetricsRpcRow {
   total_students: number;
@@ -162,7 +162,7 @@ export function DashboardView() {
 
       const paymentItems = payments.map((payment) => ({
         id: payment.id,
-        nome: studentNameById.get(payment.student_id) ?? "Aluno",
+        nome: studentNameById.get(payment.student_id) ?? "Cliente",
         valor: centsToCurrency(payment.amount_cents),
         valorCents: payment.amount_cents,
         horario: formatHour(payment.paid_at),
@@ -174,7 +174,7 @@ export function DashboardView() {
 
         return {
           id: invoice.id,
-          nome: studentNameById.get(invoice.student_id) ?? "Aluno",
+          nome: studentNameById.get(invoice.student_id) ?? "Cliente",
           vencimento: formatShortDate(invoice.due_date),
           statusText: dueMeta.text,
           aberto: centsToCurrency(abertoCents),
@@ -264,7 +264,7 @@ export function DashboardView() {
   const metricCards: MetricItem[] = [
     {
       id: "students",
-      title: "Alunos ativos",
+      title: "Clientes ativos",
       value: String(metrics.total_students ?? 0),
       helper: "base atual de contratos",
       icon: UsersRound,
@@ -298,7 +298,7 @@ export function DashboardView() {
 
   return (
     <section className="animate-fade-up space-y-4">
-      <header className="surface relative overflow-hidden rounded-3xl px-4 py-4 md:px-6 md:py-5">
+      <header className="surface relative overflow-hidden rounded-3xl border-l-4 border-amber-400/60 px-4 py-4 pl-5 md:px-6 md:py-5 md:pl-7">
         <div className="pointer-events-none absolute -left-20 bottom-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl" />
 
@@ -325,10 +325,10 @@ export function DashboardView() {
             </button>
 
             <Link
-              href="/alunos"
+              href="/clientes"
               className="btn-muted inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
             >
-              Ir para alunos
+              Ir para clientes
               <ArrowRight size={14} />
             </Link>
           </div>
@@ -378,7 +378,7 @@ export function DashboardView() {
               </p>
             </div>
             <Link
-              href="/alunos"
+              href="/clientes"
               className="btn-muted inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
             >
               Gerenciar carteira
@@ -538,4 +538,3 @@ export function DashboardView() {
     </section>
   );
 }
-

@@ -26,7 +26,7 @@ import {
   type InvoiceRow,
   type StudentRow,
   type UiStudentStatus,
-} from "@/lib/shadmensal/utils";
+} from "@/lib/shad-manager/utils";
 
 type Modalidade = "Mensal" | "Semanal" | "Trimestral";
 type ModalMode = "create" | "edit";
@@ -50,7 +50,7 @@ interface AlunoForm {
   telefone: string;
   modalidade: Modalidade;
   valor: string;
-  vencimentoCompleto: string;
+  vencimentoDia: string;
 }
 
 const statusClassName: Record<UiStudentStatus, string> = {
@@ -76,15 +76,10 @@ function getOpenAmountCents(aluno: UiAluno) {
   return Math.max(aluno.activeInvoice.amount_cents - aluno.activeInvoice.paid_amount_cents, 0);
 }
 
-function parseDueDateTime(value: string) {
-  const validFormat = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value);
-  if (!validFormat) return null;
-
-  const isoDate = value.slice(0, 10);
-  const dueDay = Number(isoDate.slice(8, 10));
+function parseDueDay(value: string) {
+  const dueDay = Number(value);
   if (Number.isNaN(dueDay) || dueDay < 1 || dueDay > 31) return null;
-
-  return { isoDate, dueDay };
+  return { dueDay };
 }
 
 function buildMonthPeriodFromIsoDate(isoDate: string) {
@@ -108,32 +103,33 @@ function buildMonthPeriodFromIsoDate(isoDate: string) {
 
 function createInitialForm(): AlunoForm {
   const now = new Date();
-  now.setSeconds(0, 0);
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
   return {
     nome: "",
     telefone: "",
     modalidade: "Mensal",
     valor: "",
-    vencimentoCompleto: `${year}-${month}-${day}T09:00`,
+    vencimentoDia: String(now.getDate()),
   };
 }
 
-function buildDateTimeFromAluno(aluno: UiAluno) {
-  if (aluno.activeInvoice?.due_date) {
-    return `${aluno.activeInvoice.due_date}T09:00`;
+function buildDayFromAluno(aluno: UiAluno) {
+  return String(aluno.vencimento);
+}
+
+function buildIsoDateFromMonth(baseIsoDate: string, dueDay: number) {
+  const [yearText, monthText] = baseIsoDate.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+
+  if (!year || !month) {
+    return buildCurrentPeriodDates(dueDay).dueDate;
   }
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const safeDay = Math.min(Math.max(aluno.vencimento, 1), lastDay);
+  const lastDay = new Date(year, month, 0).getDate();
+  const safeDay = Math.min(Math.max(dueDay, 1), lastDay);
+  const monthPadded = String(month).padStart(2, "0");
 
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}T09:00`;
+  return `${year}-${monthPadded}-${String(safeDay).padStart(2, "0")}`;
 }
 
 function formatDueDate(aluno: UiAluno) {
@@ -146,6 +142,17 @@ function formatDueDate(aluno: UiAluno) {
     month: "2-digit",
     year: "numeric",
   }).format(new Date(`${aluno.activeInvoice.due_date}T00:00:00`));
+}
+
+function formatPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
 export function AlunosView() {
@@ -162,6 +169,8 @@ export function AlunosView() {
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>("create");
   const [editingAluno, setEditingAluno] = useState<UiAluno | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [alunoToDelete, setAlunoToDelete] = useState<UiAluno | null>(null);
   const [form, setForm] = useState<AlunoForm>(createInitialForm);
 
   const refreshData = useCallback(async () => {
@@ -220,7 +229,7 @@ export function AlunosView() {
         })
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro ao carregar alunos.";
+      const message = error instanceof Error ? error.message : "Erro ao carregar clientes.";
       setErrorMessage(message);
     } finally {
       setIsLoading(false);
@@ -302,12 +311,22 @@ export function AlunosView() {
     setEditingAluno(aluno);
     setForm({
       nome: aluno.nome,
-      telefone: aluno.telefone,
+      telefone: formatPhoneNumber(aluno.telefone),
       modalidade: aluno.modalidade,
       valor: (aluno.valorCents / 100).toFixed(2),
-      vencimentoCompleto: buildDateTimeFromAluno(aluno),
+      vencimentoDia: buildDayFromAluno(aluno),
     });
     setShowModal(true);
+  };
+
+  const openDeleteModal = (aluno: UiAluno) => {
+    setAlunoToDelete(aluno);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setAlunoToDelete(null);
   };
 
   const createInvoiceForStudent = async ({
@@ -411,12 +430,9 @@ export function AlunosView() {
 
   const deleteAluno = async (aluno: UiAluno) => {
     if (!organizationId) {
-      setErrorMessage("Sessão inválida para excluir aluno.");
+      setErrorMessage("Sessão inválida para excluir cliente.");
       return;
     }
-
-    const confirmed = window.confirm(`Excluir ${aluno.nome}? Essa ação remove os registros vinculados.`);
-    if (!confirmed) return;
 
     setDeletingStudentId(aluno.id);
     setErrorMessage(null);
@@ -432,24 +448,31 @@ export function AlunosView() {
       if (error) throw new Error(error.message);
       await refreshData();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro ao excluir aluno.";
+      const message = error instanceof Error ? error.message : "Erro ao excluir cliente.";
       setErrorMessage(message);
     } finally {
       setDeletingStudentId(null);
     }
   };
 
+  const confirmDeleteAluno = async () => {
+    if (!alunoToDelete) return;
+    await deleteAluno(alunoToDelete);
+    setShowDeleteModal(false);
+    setAlunoToDelete(null);
+  };
+
   const saveAluno = async () => {
     if (!organizationId || !userId) {
-      setErrorMessage("Sessão inválida para salvar aluno.");
+      setErrorMessage("Sessão inválida para salvar cliente.");
       return;
     }
 
     const parsedValue = Number(form.valor.replace(",", "."));
-    const dueData = parseDueDateTime(form.vencimentoCompleto);
+    const dueData = parseDueDay(form.vencimentoDia);
 
     if (!form.nome || !form.telefone || Number.isNaN(parsedValue) || !dueData) {
-      setErrorMessage("Preencha nome, telefone, valor e vencimento completo.");
+      setErrorMessage("Preencha nome, telefone, valor e dia de vencimento.");
       return;
     }
 
@@ -466,6 +489,7 @@ export function AlunosView() {
       const supabase = getSupabaseBrowserClient();
 
       if (modalMode === "create") {
+        const dueDateIso = buildCurrentPeriodDates(dueData.dueDay).dueDate;
         const { data: studentData, error: studentError } = await supabase
           .from("students")
           .insert({
@@ -481,7 +505,7 @@ export function AlunosView() {
           .single();
 
         if (studentError || !studentData?.id) {
-          throw new Error(studentError?.message ?? "Falha ao criar aluno.");
+          throw new Error(studentError?.message ?? "Falha ao criar cliente.");
         }
 
         await createInvoiceForStudent({
@@ -489,12 +513,12 @@ export function AlunosView() {
           studentId: studentData.id as string,
           amountCents,
           dueDay: dueData.dueDay,
-          dueDateIso: dueData.isoDate,
+          dueDateIso,
           createdBy: userId,
         });
       } else {
         if (!editingAluno) {
-          throw new Error("Aluno em edição não encontrado.");
+          throw new Error("Cliente em edição não encontrado.");
         }
 
         const { error: updateStudentError } = await supabase
@@ -515,7 +539,7 @@ export function AlunosView() {
 
         const { data: nextOpenInvoice, error: nextOpenInvoiceError } = await supabase
           .from("invoices")
-          .select("id")
+          .select("id, due_date")
           .eq("organization_id", organizationId)
           .eq("student_id", editingAluno.id)
           .in("status", ["pending", "partial", "overdue"])
@@ -528,9 +552,13 @@ export function AlunosView() {
         }
 
         if (nextOpenInvoice?.id) {
+          const updatedDueDate = buildIsoDateFromMonth(
+            nextOpenInvoice.due_date ?? buildCurrentPeriodDates(dueData.dueDay).dueDate,
+            dueData.dueDay
+          );
           const { error: updateInvoiceError } = await supabase
             .from("invoices")
-            .update({ due_date: dueData.isoDate })
+            .update({ due_date: updatedDueDate })
             .eq("organization_id", organizationId)
             .eq("id", nextOpenInvoice.id);
 
@@ -543,19 +571,21 @@ export function AlunosView() {
       closeModal();
       await refreshData();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro ao salvar aluno.";
+      const message = error instanceof Error ? error.message : "Erro ao salvar cliente.";
       setErrorMessage(message);
     } finally {
       setIsSaving(false);
     }
   };
 
+  const isDeleteConfirming = alunoToDelete ? deletingStudentId === alunoToDelete.id : false;
+
   return (
     <section className="animate-fade-up space-y-4">
-      <header className="surface rounded-3xl px-4 py-6 md:px-6 md:py-7">
+      <header className="surface rounded-3xl border-l-4 border-amber-400/60 px-4 py-6 pl-5 md:px-6 md:py-7 md:pl-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">Sessão de alunos</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">Sessão de clientes</p>
             <h2 className="mt-4 text-3xl font-semibold leading-tight text-zinc-100 sm:text-4xl">
               Gestão de contratos, cobranças e status de pagamento.
             </h2>
@@ -579,7 +609,7 @@ export function AlunosView() {
               className="btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
             >
               <Plus size={16} />
-              Novo aluno
+              Novo cliente
             </button>
           </div>
         </div>
@@ -593,7 +623,7 @@ export function AlunosView() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="surface-soft rounded-2xl p-4">
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Total de alunos</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Total de clientes</p>
           <p className="mt-2 inline-flex items-center gap-2 text-2xl font-semibold text-zinc-100">
             <UsersRound size={18} />
             {statusCounts.Todos}
@@ -695,7 +725,7 @@ export function AlunosView() {
                     ? (
                         <tr>
                           <td colSpan={8} className="px-3 py-8 text-center text-sm text-zinc-400">
-                            Nenhum aluno encontrado para o filtro atual.
+                            Nenhum cliente encontrado para o filtro atual.
                           </td>
                         </tr>
                       )
@@ -759,7 +789,7 @@ export function AlunosView() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => void deleteAluno(aluno)}
+                                  onClick={() => openDeleteModal(aluno)}
                                   disabled={isDeleting}
                                   className="btn-muted inline-flex items-center justify-center rounded-lg p-1.5 text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                                   aria-label={`Excluir ${aluno.nome}`}
@@ -783,7 +813,7 @@ export function AlunosView() {
               : filteredAlunos.length === 0
                 ? (
                     <p className="surface-soft rounded-xl px-4 py-3 text-sm text-zinc-400">
-                      Nenhum aluno encontrado para o filtro atual.
+                      Nenhum cliente encontrado para o filtro atual.
                     </p>
                   )
                 : filteredAlunos.map((aluno) => {
@@ -847,7 +877,7 @@ export function AlunosView() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => void deleteAluno(aluno)}
+                            onClick={() => openDeleteModal(aluno)}
                             disabled={isDeleting}
                             className="btn-muted inline-flex items-center justify-center rounded-lg p-1.5 text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                             aria-label={`Excluir ${aluno.nome}`}
@@ -879,7 +909,7 @@ export function AlunosView() {
             <div className="mt-3 space-y-2">
               {priorityOverdues.length === 0 ? (
                 <p className="surface-soft rounded-xl px-3 py-2 text-xs text-zinc-400">
-                  Sem alunos inadimplentes no momento.
+                  Sem clientes inadimplentes no momento.
                 </p>
               ) : (
                 priorityOverdues.map((aluno) => (
@@ -907,7 +937,7 @@ export function AlunosView() {
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-zinc-100">
-                  {modalMode === "create" ? "Novo aluno" : "Editar aluno"}
+                  {modalMode === "create" ? "Novo cliente" : "Editar cliente"}
                 </h3>
                 <p className="mt-1 text-sm text-zinc-400">
                   {modalMode === "create"
@@ -941,8 +971,13 @@ export function AlunosView() {
                 <input
                   value={form.telefone}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, telefone: event.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      telefone: formatPhoneNumber(event.target.value),
+                    }))
                   }
+                  inputMode="tel"
+                  maxLength={15}
                   className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
                   placeholder="(11) 90000-0000"
                 />
@@ -977,14 +1012,17 @@ export function AlunosView() {
               </label>
 
               <label className="sm:col-span-2">
-                <span className="mb-2 block text-sm text-zinc-300">Vencimento (data e hora)</span>
+                <span className="mb-2 block text-sm text-zinc-300">Vencimento (dia)</span>
                 <input
-                  value={form.vencimentoCompleto}
+                  value={form.vencimentoDia}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, vencimentoCompleto: event.target.value }))
+                    setForm((current) => ({ ...current, vencimentoDia: event.target.value }))
                   }
-                  type="datetime-local"
+                  type="number"
+                  min={1}
+                  max={31}
                   className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
+                  placeholder="Ex.: 10"
                 />
               </label>
             </div>
@@ -1010,7 +1048,55 @@ export function AlunosView() {
           </div>
         </div>
       ) : null}
+
+      {showDeleteModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="surface animate-scale-in w-full max-w-md rounded-2xl p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-zinc-100">Excluir cliente</h3>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Essa ação remove os registros vinculados.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Fechar modal"
+                onClick={closeDeleteModal}
+                disabled={isDeleteConfirming}
+                className="btn-muted rounded-lg p-1.5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {alunoToDelete
+                ? `Confirma a exclusão de ${alunoToDelete.nome}?`
+                : "Confirma a exclusão deste cliente?"}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                disabled={isDeleteConfirming}
+                className="btn-muted rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteAluno()}
+                disabled={isDeleteConfirming}
+                className="inline-flex items-center justify-center rounded-xl border border-red-500/40 bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeleteConfirming ? "Excluindo..." : "Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
-

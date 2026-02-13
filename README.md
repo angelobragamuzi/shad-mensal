@@ -1,11 +1,11 @@
-# ShadMensal Frontend
+# Shad Manager Frontend
 
-Frontend SaaS do ShadMensal em `Next.js + Tailwind`, integrado com Supabase Auth + Database.
+Frontend SaaS do Shad Manager em `Next.js + Tailwind`, integrado com Supabase Auth + Database.
 
 ## Requisitos
 
 - Node 20+
-- Projeto Supabase com a migration em `supabase/migrations/202602130001_shadmensal_init.sql` aplicada
+- Projeto Supabase com a migration em `supabase/migrations/202602130001_shad-manager_init.sql` aplicada
 - Usuario criado em `Authentication > Users`
 
 ## Variaveis de ambiente
@@ -34,9 +34,9 @@ Abra `http://localhost:3000`.
 1. Acessar `/login`.
 2. Login com email/senha do usuario criado no Supabase Auth.
 3. Redirecionamento para `/dashboard`.
-4. Tela `/alunos` lendo e gravando no banco:
-   - listar alunos reais
-   - criar novo aluno (ja cria primeira fatura)
+4. Tela `/clientes` lendo e gravando no banco:
+   - listar clientes reais
+   - criar novo cliente (ja cria primeira fatura)
    - marcar como pago (insere em `payments` e atualiza fatura via trigger)
 
 ## Observacoes

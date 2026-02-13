@@ -9,8 +9,11 @@ const sora = Sora({
 });
 
 export const metadata: Metadata = {
-  title: "ShadMensal | ShadSolutions",
+  title: "Shad Manager | ShadSolutions",
   description: "Gestão inteligente de mensalidades.",
+  icons: {
+    icon: "/icon-logo.svg",
+  },
 };
 
 export default function RootLayout({

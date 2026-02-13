@@ -1,4 +1,4 @@
-﻿-- ShadMensal - Initial Supabase schema
+﻿-- Shad Manager - Initial Supabase schema
 -- Includes multi-tenant tables, RLS policies, and helper RPC functions.
 
 begin;
