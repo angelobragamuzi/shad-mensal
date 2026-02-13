@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ShadMensal Frontend
 
-## Getting Started
+Frontend SaaS do ShadMensal em `Next.js + Tailwind`, integrado com Supabase Auth + Database.
 
-First, run the development server:
+## Requisitos
+
+- Node 20+
+- Projeto Supabase com a migration em `supabase/migrations/202602130001_shadmensal_init.sql` aplicada
+- Usuario criado em `Authentication > Users`
+
+## Variaveis de ambiente
+
+1. Copie `.env.example` para `.env.local`.
+2. Preencha:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Esses valores ficam em `Supabase Dashboard > Project Settings > API`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Rodar local
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Abra `http://localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Fluxo esperado
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Acessar `/login`.
+2. Login com email/senha do usuario criado no Supabase Auth.
+3. Redirecionamento para `/dashboard`.
+4. Tela `/alunos` lendo e gravando no banco:
+   - listar alunos reais
+   - criar novo aluno (ja cria primeira fatura)
+   - marcar como pago (insere em `payments` e atualiza fatura via trigger)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Observacoes
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- As rotas do painel checam sessao no client e redirecionam para `/login` sem autenticacao.
+- A funcao RPC `get_dashboard_metrics` depende de membership em `organization_members`.
+- Se login funcionar, mas dashboard retornar vazio, verifique se o usuario tem `organization_members.role = owner/admin/staff` na organizacao.

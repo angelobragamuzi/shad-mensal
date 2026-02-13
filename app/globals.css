@@ -1,26 +1,162 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #050913;
+  --foreground: #eff4ff;
+  --muted: #95a0b8;
+  --border: rgba(126, 148, 191, 0.24);
+  --card: rgba(8, 13, 24, 0.87);
+  --card-soft: rgba(8, 13, 23, 0.62);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-sora);
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% -5%, rgba(59, 101, 198, 0.2), transparent 42%),
+    radial-gradient(circle at 88% 0%, rgba(42, 91, 109, 0.24), transparent 35%),
+    linear-gradient(145deg, #03060f 0%, #060a15 50%, #040711 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sora), "Segoe UI", sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0a101b;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid #0a101b;
+  background: linear-gradient(180deg, #202b40, #101722);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #2a3a58, #162033);
+}
+
+.app-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(110, 132, 179, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(110, 132, 179, 0.05) 1px, transparent 1px),
+      radial-gradient(circle at 15% 16%, rgba(47, 78, 161, 0.2), transparent 44%),
+      radial-gradient(circle at 85% 12%, rgba(37, 108, 121, 0.14), transparent 40%);
+  background-size: 72px 72px, 72px 72px, auto, auto;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.surface {
+  background: linear-gradient(165deg, var(--card) 0%, rgba(7, 12, 21, 0.95) 100%);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 26px rgba(2, 6, 14, 0.44);
+}
+
+.surface-soft {
+  background: var(--card-soft);
+  border: 1px solid rgba(120, 144, 190, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.glow-focus:focus {
+  box-shadow: 0 0 0 1px rgba(194, 213, 255, 0.5), 0 0 0 4px rgba(71, 100, 162, 0.2);
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.45s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.25s ease-out both;
+}
+
+.animate-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    100deg,
+    transparent 15%,
+    rgba(255, 255, 255, 0.12) 45%,
+    transparent 75%
+  );
+  animation: shimmer 1.2s infinite;
+}
+
+.btn-primary {
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  background: #f3f6ff;
+  color: #0b1020;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  box-shadow: 0 8px 20px rgba(185, 203, 250, 0.28);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  background: #ffffff;
+}
+
+.btn-muted {
+  border: 1px solid rgba(141, 161, 199, 0.24);
+  background: rgba(11, 17, 30, 0.86);
+  color: #dbe4ff;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-muted:hover {
+  border-color: rgba(177, 201, 255, 0.34);
+  background: rgba(18, 25, 40, 0.9);
+}
+
+.field {
+  border: 1px solid rgba(141, 161, 199, 0.3);
+  background: rgba(8, 12, 22, 0.86);
+  color: #f3f6ff;
+}
+
+.field::placeholder {
+  color: #6f7992;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
