@@ -1,15 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0e0e10;
-  --foreground: #f7f7f8;
-  --muted: #9c9ca3;
-  --border: rgba(255, 255, 255, 0.16);
-  --card: #131316;
-  --card-soft: #1a1a1f;
-  --accent: #f5a524;
-  --accent-strong: #ffb84d;
-  --accent-ink: #111111;
+  --background: #f2f2f2;
+  --foreground: #161616;
+  --foreground-strong: #0d0d0d;
+  --muted: #616161;
+  --muted-soft: #7a7a7a;
+  --border: #d8d8d8;
+  --card: #ffffff;
+  --card-soft: #ececec;
+  --accent: #f07f1d;
+  --accent-hover: #df6e0d;
+  --accent-ink: #140d06;
+  --focus: rgba(240, 127, 29, 0.38);
+  --shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --background: #090909;
+  --foreground: #ededed;
+  --foreground-strong: #ffffff;
+  --muted: #a2a2a2;
+  --muted-soft: #8a8a8a;
+  --border: #2b2b2b;
+  --card: #121212;
+  --card-soft: #171717;
+  --accent: #ff8c2f;
+  --accent-hover: #ff9b4c;
+  --accent-ink: #0f0b07;
+  --focus: rgba(255, 140, 47, 0.42);
+  --shadow: 0 10px 24px rgba(0, 0, 0, 0.38);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -18,12 +40,14 @@
   --font-sans: var(--font-sora);
 }
 
+html,
+body {
+  min-height: 100%;
+}
+
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 12% -8%, rgba(245, 165, 36, 0.16), transparent 38%),
-    radial-gradient(circle at 85% 8%, rgba(255, 255, 255, 0.05), transparent 42%),
-    linear-gradient(180deg, #0c0c0f 0%, #0e0e10 55%, #0b0b0d 100%);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sora), "Segoe UI", sans-serif;
 }
@@ -33,22 +57,22 @@ body {
 }
 
 *::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 }
 
 *::-webkit-scrollbar-track {
-  background: #101013;
+  background: var(--background);
 }
 
 *::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  border: 2px solid #101013;
-  background: linear-gradient(180deg, #2a2a2f, #16161a);
+  border: 2px solid var(--background);
+  background: #909090;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #3a3a41, #202026);
+  background: #7b7b7b;
 }
 
 .app-bg::before {
@@ -56,35 +80,144 @@ body {
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.03) 0,
-      rgba(255, 255, 255, 0.03) 1px,
-      transparent 1px,
-      transparent 10px
-    ),
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: auto, 140px 140px, 140px 140px;
-  opacity: 0.45;
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: 0.35;
   pointer-events: none;
 }
 
+[data-theme="dark"] .app-bg::before {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  opacity: 0.26;
+}
+
+.login-bg {
+  background: var(--background);
+}
+
+.login-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.05) 0,
+      rgba(0, 0, 0, 0.05) 1px,
+      transparent 1px,
+      transparent 12px
+    ),
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: auto, 52px 52px, 52px 52px;
+  opacity: 0.52;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .login-bg::before {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04) 0,
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px,
+      transparent 12px
+    ),
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  opacity: 0.4;
+}
+
+.login-fx {
+  pointer-events: none;
+}
+
+.login-fx::before,
+.login-fx::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(58px);
+  animation: loginDrift 18s ease-in-out infinite alternate;
+}
+
+.login-fx::before {
+  width: min(52vw, 620px);
+  height: min(52vw, 620px);
+  left: -12vw;
+  top: -18vh;
+  background: rgba(240, 127, 29, 0.24);
+}
+
+.login-fx::after {
+  width: min(46vw, 520px);
+  height: min(46vw, 520px);
+  right: -10vw;
+  bottom: -20vh;
+  background: rgba(240, 127, 29, 0.14);
+  animation-duration: 22s;
+}
+
+[data-theme="dark"] .login-fx::before {
+  background: rgba(255, 140, 47, 0.3);
+}
+
+[data-theme="dark"] .login-fx::after {
+  background: rgba(255, 140, 47, 0.2);
+}
+
 .surface {
-  background: linear-gradient(180deg, rgba(245, 165, 36, 0.06) 0%, transparent 26%),
-    var(--card);
+  background: var(--card);
   border: 1px solid var(--border);
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow);
 }
 
 .surface-soft {
   background: var(--card-soft);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
 }
 
-.glow-focus:focus {
-  box-shadow: 0 0 0 2px rgba(245, 165, 36, 0.45);
+.btn-primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+.btn-muted {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-muted:hover {
+  border-color: var(--accent);
+  background: var(--card-soft);
+}
+
+.field {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+}
+
+.field::placeholder {
+  color: var(--muted-soft);
+}
+
+.glow-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus);
 }
 
 .animate-fade-up {
@@ -100,48 +233,63 @@ body {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(
-    100deg,
-    transparent 15%,
-    rgba(255, 255, 255, 0.08) 45%,
-    transparent 75%
-  );
+  background: linear-gradient(100deg, transparent 15%, rgba(255, 255, 255, 0.12) 50%, transparent 75%);
   animation: shimmer 1.2s infinite;
 }
 
-.btn-primary {
-  border: 1px solid rgba(245, 165, 36, 0.9);
-  background: linear-gradient(180deg, #ffbf5c 0%, #f5a524 100%);
-  color: var(--accent-ink);
-  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
-  box-shadow: 0 12px 24px rgba(245, 165, 36, 0.2);
+[data-theme="light"] .animate-shimmer::after {
+  background: linear-gradient(100deg, transparent 15%, rgba(0, 0, 0, 0.08) 50%, transparent 75%);
 }
 
-.btn-primary:hover {
-  transform: translateY(-1px);
-  background: linear-gradient(180deg, #ffd07a 0%, #ffb13d 100%);
+.rounded-3xl {
+  border-radius: 0.9rem !important;
 }
 
-.btn-muted {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #141417;
-  color: #e6e6e6;
-  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+.rounded-2xl {
+  border-radius: 0.75rem !important;
 }
 
-.btn-muted:hover {
-  border-color: rgba(245, 165, 36, 0.35);
-  background: #1b1b20;
+.rounded-xl {
+  border-radius: 0.625rem !important;
 }
 
-.field {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #101013;
-  color: #f4f4f5;
+.rounded-lg {
+  border-radius: 0.5rem !important;
 }
 
-.field::placeholder {
-  color: #71717a;
+.text-zinc-100,
+.text-zinc-200,
+.text-zinc-300 {
+  color: var(--foreground) !important;
+}
+
+.text-zinc-400 {
+  color: var(--muted) !important;
+}
+
+.text-zinc-500 {
+  color: var(--muted-soft) !important;
+}
+
+.border-white\/8,
+.border-white\/10,
+.border-white\/20,
+.border-white\/30,
+.border-white\/35,
+.border-white\/40 {
+  border-color: var(--border) !important;
+}
+
+.bg-white\/5,
+.bg-white\/10 {
+  background-color: var(--card-soft) !important;
+}
+
+.bg-zinc-900,
+.bg-zinc-900\/35,
+.bg-zinc-900\/80,
+.bg-zinc-950\/35 {
+  background-color: var(--card-soft) !important;
 }
 
 @keyframes fadeUp {
@@ -169,5 +317,14 @@ body {
 @keyframes shimmer {
   to {
     transform: translateX(100%);
+  }
+}
+
+@keyframes loginDrift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(5vw, 4vh, 0) scale(1.12);
   }
 }

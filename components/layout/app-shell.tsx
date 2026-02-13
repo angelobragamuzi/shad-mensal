@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays, LayoutDashboard, LogOut, Menu, UsersRound, X } from "lucide-react";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 interface AppShellProps {
@@ -19,7 +20,7 @@ type MenuItem = {
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/clientes", icon: UsersRound },
-  { label: "Calendário", href: "/calendario", icon: CalendarDays },
+  { label: "Calendario", href: "/calendario", icon: CalendarDays },
 ];
 
 export function AppShell({ children }: AppShellProps) {
@@ -55,7 +56,7 @@ export function AppShell({ children }: AppShellProps) {
       }
     };
 
-    validateSession();
+    void validateSession();
 
     const {
       data: { subscription },
@@ -82,6 +83,11 @@ export function AppShell({ children }: AppShellProps) {
     return userEmail.split("@")[0];
   }, [userEmail]);
 
+  const currentSection = useMemo(
+    () => menuItems.find((item) => pathname === item.href)?.label ?? "Painel",
+    [pathname]
+  );
+
   const handleLogout = async () => {
     setLogoutLoading(true);
     try {
@@ -95,92 +101,91 @@ export function AppShell({ children }: AppShellProps) {
 
   if (isAuthChecking) {
     return (
-      <div className="relative min-h-screen text-zinc-100">
+      <div className="relative min-h-screen text-[var(--foreground)]">
         <div className="app-bg fixed inset-0 -z-20" />
-        <div className="px-3 pt-4 md:px-4">
-          <div className="surface h-64 animate-pulse rounded-2xl" />
+        <div className="h-screen p-4 md:p-6">
+          <div className="surface h-full animate-pulse" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen text-zinc-100">
+    <div className="relative min-h-screen text-[var(--foreground)]">
       <div className="app-bg fixed inset-0 -z-20" />
 
-      <div className="min-h-screen md:pl-[250px]">
-        <aside className="surface hidden border-r border-white/10 md:fixed md:inset-y-4 md:left-4 md:flex md:w-[230px] md:flex-col md:rounded-2xl md:p-4">
-          <div className="mb-6">
-            <div className="h-20 w-[200px] overflow-hidden">
-              <img
-                src="/manager.svg"
-                alt="Shad Manager"
-                className="h-full w-full object-cover object-left"
-              />
+      <aside className="surface fixed inset-y-0 left-0 z-40 hidden w-64 border-r md:flex md:flex-col md:rounded-none md:border-l-0 md:border-t-0 md:border-b-0 md:shadow-none">
+        <div className="border-b border-[var(--border)] px-6 py-5">
+          <div className="h-12 w-[200px] overflow-hidden">
+            <img src="/manager.svg" alt="Shad Manager" className="h-full w-full object-cover object-left" />
+          </div>
+          <h1 className="sr-only">Shad Manager</h1>
+        </div>
+
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={[
+                  "inline-flex w-full items-center gap-2 rounded-md border px-3 py-2.5 text-sm transition",
+                  isActive
+                    ? "border-[var(--accent)] bg-[var(--card-soft)] text-[var(--foreground-strong)]"
+                    : "border-transparent text-[var(--muted)] hover:border-[var(--border)] hover:bg-[var(--card-soft)] hover:text-[var(--foreground)]",
+                ].join(" ")}
+              >
+                <Icon size={16} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-[var(--border)] px-4 py-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted-soft)]">Usuario</p>
+              <p className="truncate text-sm font-medium text-[var(--foreground)]">{userName}</p>
             </div>
-            <h1 className="sr-only">Shad Manager</h1>
+            <ThemeToggle compact />
           </div>
 
-          <nav className="grid gap-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={[
-                    "inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition",
-                    isActive
-                      ? "border-amber-400/50 bg-amber-500/10 text-amber-100"
-                      : "border-transparent text-zinc-400 hover:border-amber-400/25 hover:bg-amber-500/5 hover:text-zinc-100",
-                  ].join(" ")}
-                >
-                  <Icon size={16} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="mt-auto border-t border-white/10 pt-4">
-            <p className="text-xs text-zinc-500">Usuário</p>
-            <p className="mt-1 truncate text-sm font-medium text-zinc-200">{userName}</p>
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={logoutLoading}
-              className="btn-muted mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <LogOut size={15} />
-              {logoutLoading ? "Saindo..." : "Sair"}
-            </button>
-          </div>
-        </aside>
-
-        <header className="surface sticky top-0 z-30 m-3 flex items-center justify-between rounded-2xl px-3 py-2 md:hidden">
-          <div className="flex items-center gap-2">
-            <div className="h-14 w-[170px] overflow-hidden">
-              <img
-                src="/manager.svg"
-                alt="Shad Manager"
-                className="h-full w-full object-cover object-left"
-              />
-            </div>
-            <p className="sr-only">Shad Manager</p>
-          </div>
           <button
             type="button"
-            onClick={() => setIsMenuOpen((value) => !value)}
-            className="btn-muted rounded-lg p-2"
-            aria-label="Abrir menu"
+            onClick={handleLogout}
+            disabled={logoutLoading}
+            className="btn-muted inline-flex h-10 w-full items-center justify-center gap-2 rounded-md px-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isMenuOpen ? <X size={16} /> : <Menu size={16} />}
+            <LogOut size={15} />
+            {logoutLoading ? "Saindo..." : "Sair"}
           </button>
+        </div>
+      </aside>
+
+      <div className="md:pl-64">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-3 backdrop-blur md:hidden">
+          <div className="h-10 w-[165px] overflow-hidden">
+            <img src="/manager.svg" alt="Shad Manager" className="h-full w-full object-cover object-left" />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <ThemeToggle compact />
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((value) => !value)}
+              className="btn-muted inline-flex h-9 w-9 items-center justify-center rounded-md"
+              aria-label="Abrir menu"
+            >
+              {isMenuOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+          </div>
         </header>
 
         {isMenuOpen ? (
-          <div className="surface mx-3 mb-3 grid gap-2 rounded-2xl p-3 md:hidden">
+          <div className="surface mx-3 mt-3 grid gap-2 rounded-md p-3 md:hidden">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -189,10 +194,10 @@ export function AppShell({ children }: AppShellProps) {
                   key={item.label}
                   href={item.href}
                   className={[
-                    "inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition",
+                    "inline-flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm transition",
                     isActive
-                      ? "border-amber-400/50 bg-amber-500/10 text-amber-100"
-                      : "border-transparent text-zinc-400 hover:border-amber-400/25 hover:bg-amber-500/5 hover:text-zinc-100",
+                      ? "border-[var(--accent)] bg-[var(--card-soft)] text-[var(--foreground)]"
+                      : "border-transparent text-[var(--muted)] hover:border-[var(--border)] hover:bg-[var(--card-soft)] hover:text-[var(--foreground)]",
                   ].join(" ")}
                 >
                   <Icon size={16} />
@@ -204,7 +209,7 @@ export function AppShell({ children }: AppShellProps) {
               type="button"
               onClick={handleLogout}
               disabled={logoutLoading}
-              className="btn-muted mt-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+              className="btn-muted mt-1 inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
             >
               <LogOut size={15} />
               {logoutLoading ? "Saindo..." : "Sair"}
@@ -212,7 +217,18 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         ) : null}
 
-        <main className="px-3 pb-4 md:px-4 md:pb-5 md:pt-4">{children}</main>
+        <header className="sticky top-0 z-20 hidden h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-8 backdrop-blur md:flex">
+          <div>
+            <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted-soft)]">Painel</p>
+            <h2 className="text-base font-semibold text-[var(--foreground-strong)]">{currentSection}</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="max-w-[220px] truncate text-sm text-[var(--muted)]">{userEmail}</span>
+            <ThemeToggle />
+          </div>
+        </header>
+
+        <main className="px-3 py-4 md:px-8 md:py-6">{children}</main>
       </div>
     </div>
   );

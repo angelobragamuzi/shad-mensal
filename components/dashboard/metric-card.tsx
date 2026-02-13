@@ -15,7 +15,7 @@ const toneClasses: Record<MetricTone, string> = {
 
 export function MetricCard({ title, value, helper, tone = "neutral" }: MetricCardProps) {
   return (
-    <article className="surface rounded-3xl p-5">
+    <article className="surface rounded-lg p-5">
       <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">{title}</p>
       <p className={`mt-3 text-3xl font-semibold tracking-tight ${toneClasses[tone]}`}>{value}</p>
       <p className="mt-2 text-sm text-zinc-400">{helper}</p>

@@ -298,17 +298,14 @@ export function DashboardView() {
 
   return (
     <section className="animate-fade-up space-y-4">
-      <header className="surface relative overflow-hidden rounded-3xl border-l-4 border-amber-400/60 px-4 py-4 pl-5 md:px-6 md:py-5 md:pl-7">
-        <div className="pointer-events-none absolute -left-20 bottom-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl" />
-
-        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="surface overflow-hidden rounded-lg border-l-2 border-[var(--accent)] px-4 py-4 md:px-6 md:py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5">
+            <span className="inline-flex items-center gap-1 rounded-md border border-white/10 px-3 py-1.5">
               <CalendarDays size={13} />
               {dataAtual}
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5">
+            <span className="inline-flex items-center gap-1 rounded-md border border-white/10 px-3 py-1.5">
               <Clock3 size={13} />
               {lastSync ? `última atualização ${lastSync}` : "sincronizando dados"}
             </span>
@@ -318,7 +315,7 @@ export function DashboardView() {
             <button
               type="button"
               onClick={() => void loadDashboard()}
-              className="btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+              className="btn-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold"
             >
               <RefreshCcw size={14} />
               Atualizar dados
@@ -326,7 +323,7 @@ export function DashboardView() {
 
             <Link
               href="/clientes"
-              className="btn-muted inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+              className="btn-muted inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm"
             >
               Ir para clientes
               <ArrowRight size={14} />
@@ -336,20 +333,20 @@ export function DashboardView() {
       </header>
 
       {errorMessage ? (
-        <div className="surface rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+        <div className="surface rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
           {errorMessage}
         </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {isLoading
-          ? metricCards.map((metric) => <Skeleton key={metric.id} className="h-[132px] rounded-2xl" />)
+          ? metricCards.map((metric) => <Skeleton key={metric.id} className="h-[132px] rounded-md" />)
           : metricCards.map((metric) => {
               const Icon = metric.icon;
               return (
                 <article
                   key={metric.id}
-                  className="surface-soft rounded-2xl p-4 transition duration-200 hover:-translate-y-[1px] hover:border-white/20"
+                  className="surface-soft rounded-md p-4 transition duration-200 hover:-translate-y-[1px] hover:border-white/20"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -369,7 +366,7 @@ export function DashboardView() {
       </div>
 
       <div className="grid gap-4 2xl:grid-cols-[1.45fr_0.95fr]">
-        <section className="surface rounded-3xl p-4 md:p-5">
+        <section className="surface rounded-lg p-4 md:p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-zinc-100">Agenda de cobrança</h3>
@@ -379,7 +376,7 @@ export function DashboardView() {
             </div>
             <Link
               href="/clientes"
-              className="btn-muted inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
+              className="btn-muted inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs"
             >
               Gerenciar carteira
               <ArrowRight size={13} />
@@ -387,23 +384,23 @@ export function DashboardView() {
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <article className="surface-soft rounded-2xl p-3">
+            <article className="surface-soft rounded-md p-3">
               <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Críticos em atraso</p>
               <div className="mt-2 space-y-2">
                 {isLoading
                   ? Array.from({ length: 5 }).map((_, index) => (
-                      <Skeleton key={`critical-skeleton-${index}`} className="h-14 rounded-xl" />
+                      <Skeleton key={`critical-skeleton-${index}`} className="h-14 rounded-md" />
                     ))
                   : criticalInvoices.length === 0
                     ? (
-                        <p className="rounded-xl border border-white/8 bg-zinc-950/35 px-3 py-2 text-xs text-zinc-400">
+                        <p className="rounded-md border border-white/8 bg-zinc-950/35 px-3 py-2 text-xs text-zinc-400">
                           Nenhuma fatura em atraso no momento.
                         </p>
                       )
                     : criticalInvoices.map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-xl border border-white/8 bg-zinc-950/35 px-3 py-2"
+                          className="rounded-md border border-white/8 bg-zinc-950/35 px-3 py-2"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <p className="truncate text-sm font-medium text-zinc-100">{item.nome}</p>
@@ -417,23 +414,23 @@ export function DashboardView() {
               </div>
             </article>
 
-            <article className="surface-soft rounded-2xl p-3">
+            <article className="surface-soft rounded-md p-3">
               <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Próximos vencimentos</p>
               <div className="mt-2 space-y-2">
                 {isLoading
                   ? Array.from({ length: 5 }).map((_, index) => (
-                      <Skeleton key={`upcoming-skeleton-${index}`} className="h-14 rounded-xl" />
+                      <Skeleton key={`upcoming-skeleton-${index}`} className="h-14 rounded-md" />
                     ))
                   : upcomingInvoices.length === 0
                     ? (
-                        <p className="rounded-xl border border-white/8 bg-zinc-950/35 px-3 py-2 text-xs text-zinc-400">
+                        <p className="rounded-md border border-white/8 bg-zinc-950/35 px-3 py-2 text-xs text-zinc-400">
                           Sem vencimentos pendentes para os próximos dias.
                         </p>
                       )
                     : upcomingInvoices.map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-xl border border-white/8 bg-zinc-950/35 px-3 py-2"
+                          className="rounded-md border border-white/8 bg-zinc-950/35 px-3 py-2"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <p className="truncate text-sm font-medium text-zinc-100">{item.nome}</p>
@@ -450,7 +447,7 @@ export function DashboardView() {
         </section>
 
         <aside className="space-y-4">
-          <article className="surface rounded-3xl p-4 md:p-5">
+          <article className="surface rounded-lg p-4 md:p-5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-zinc-100">Saúde da receita</h3>
               <TrendingUp size={16} className="text-zinc-400" />
@@ -462,9 +459,9 @@ export function DashboardView() {
                   <span className="text-zinc-400">Meta recebida</span>
                   <span className="text-zinc-200">{Math.round(recebimentoRatio * 100)}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-zinc-900">
+                <div className="h-2 rounded-md bg-zinc-900">
                   <div
-                    className="h-2 rounded-full bg-emerald-400/80"
+                    className="h-2 rounded-md bg-emerald-400/80"
                     style={{ width: ratioToWidth(recebimentoRatio) }}
                   />
                 </div>
@@ -475,22 +472,22 @@ export function DashboardView() {
                   <span className="text-zinc-400">Inadimplência</span>
                   <span className="text-zinc-200">{Math.round(inadimplenciaRatio * 100)}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-zinc-900">
+                <div className="h-2 rounded-md bg-zinc-900">
                   <div
-                    className="h-2 rounded-full bg-amber-400/80"
+                    className="h-2 rounded-md bg-amber-400/80"
                     style={{ width: ratioToWidth(inadimplenciaRatio) }}
                   />
                 </div>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <div className="surface-soft rounded-xl p-3">
+                <div className="surface-soft rounded-md p-3">
                   <p className="text-xs text-zinc-500">Ticket médio</p>
                   <p className="mt-1 text-base font-semibold text-zinc-100">
                     {centsToCurrency(ticketMedioCents)}
                   </p>
                 </div>
-                <div className="surface-soft rounded-xl p-3">
+                <div className="surface-soft rounded-md p-3">
                   <p className="text-xs text-zinc-500">Entradas recentes</p>
                   <p className="mt-1 text-base font-semibold text-emerald-300">
                     {centsToCurrency(totalPagamentosRecentesCents)}
@@ -500,10 +497,10 @@ export function DashboardView() {
             </div>
           </article>
 
-          <article className="surface rounded-3xl p-4 md:p-5">
+          <article className="surface rounded-lg p-4 md:p-5">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-zinc-100">Pagamentos recentes</h3>
-              <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400">
+              <span className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400">
                 {pagamentosRecentes.length} registros
               </span>
             </div>
@@ -511,18 +508,18 @@ export function DashboardView() {
             <div className="space-y-2">
               {isLoading
                 ? Array.from({ length: 6 }).map((_, index) => (
-                    <Skeleton key={`payment-skeleton-${index}`} className="h-14 rounded-xl" />
+                    <Skeleton key={`payment-skeleton-${index}`} className="h-14 rounded-md" />
                   ))
                 : pagamentosRecentes.length === 0
                   ? (
-                      <p className="surface-soft rounded-xl px-3 py-2 text-sm text-zinc-400">
+                      <p className="surface-soft rounded-md px-3 py-2 text-sm text-zinc-400">
                         Nenhum pagamento registrado ainda.
                       </p>
                     )
                   : pagamentosRecentes.map((item) => (
                       <div
                         key={item.id}
-                        className="surface-soft flex items-center justify-between rounded-xl px-3 py-2"
+                        className="surface-soft flex items-center justify-between rounded-md px-3 py-2"
                       >
                         <div>
                           <p className="text-sm font-medium text-zinc-100">{item.nome}</p>
@@ -538,3 +535,5 @@ export function DashboardView() {
     </section>
   );
 }
+
+

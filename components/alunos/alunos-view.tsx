@@ -582,7 +582,7 @@ export function AlunosView() {
 
   return (
     <section className="animate-fade-up space-y-4">
-      <header className="surface rounded-3xl border-l-4 border-amber-400/60 px-4 py-6 pl-5 md:px-6 md:py-7 md:pl-7">
+      <header className="surface rounded-md border-l-2 border-[var(--accent)] px-4 py-6 md:px-6 md:py-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">Sessão de clientes</p>
@@ -598,7 +598,7 @@ export function AlunosView() {
             <button
               type="button"
               onClick={() => void refreshData()}
-              className="btn-muted inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+              className="btn-muted inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm"
             >
               <RefreshCcw size={14} />
               Atualizar
@@ -606,7 +606,7 @@ export function AlunosView() {
             <button
               type="button"
               onClick={openCreateModal}
-              className="btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+              className="btn-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold"
             >
               <Plus size={16} />
               Novo cliente
@@ -616,13 +616,13 @@ export function AlunosView() {
       </header>
 
       {errorMessage ? (
-        <div className="surface rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+        <div className="surface rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
           {errorMessage}
         </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="surface-soft rounded-2xl p-4">
+        <article className="surface-soft rounded-md p-4">
           <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Total de clientes</p>
           <p className="mt-2 inline-flex items-center gap-2 text-2xl font-semibold text-zinc-100">
             <UsersRound size={18} />
@@ -630,7 +630,7 @@ export function AlunosView() {
           </p>
         </article>
 
-        <article className="surface-soft rounded-2xl p-4">
+        <article className="surface-soft rounded-md p-4">
           <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Pagos</p>
           <p className="mt-2 inline-flex items-center gap-2 text-2xl font-semibold text-emerald-300">
             <CheckCircle2 size={18} />
@@ -638,7 +638,7 @@ export function AlunosView() {
           </p>
         </article>
 
-        <article className="surface-soft rounded-2xl p-4">
+        <article className="surface-soft rounded-md p-4">
           <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Próximos do vencimento</p>
           <p className="mt-2 inline-flex items-center gap-2 text-2xl font-semibold text-amber-300">
             <Clock3 size={18} />
@@ -646,7 +646,7 @@ export function AlunosView() {
           </p>
         </article>
 
-        <article className="surface-soft rounded-2xl p-4">
+        <article className="surface-soft rounded-md p-4">
           <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Inadimplência</p>
           <p className="mt-2 inline-flex items-center gap-2 text-2xl font-semibold text-red-300">
             <AlertTriangle size={18} />
@@ -656,7 +656,7 @@ export function AlunosView() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.5fr_0.7fr]">
-        <section className="surface rounded-3xl p-4 md:p-5">
+        <section className="surface rounded-md p-4 md:p-5">
           <div className="mb-4 flex flex-col gap-3">
             <div className="relative w-full">
               <Search
@@ -667,7 +667,7 @@ export function AlunosView() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar por nome ou telefone"
-                className="field glow-focus h-11 w-full rounded-xl pl-9 pr-4 text-sm outline-none"
+                className="field glow-focus h-11 w-full rounded-md pl-9 pr-4 text-sm outline-none"
               />
             </div>
 
@@ -680,7 +680,7 @@ export function AlunosView() {
                     type="button"
                     onClick={() => setStatusFilter(filter)}
                     className={[
-                      "rounded-full border px-3 py-1.5 text-xs transition",
+                      "rounded-md border px-3 py-1.5 text-xs transition",
                       isActive
                         ? "border-white/30 bg-white/10 text-zinc-100"
                         : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100",
@@ -742,7 +742,7 @@ export function AlunosView() {
                             <td className="px-3 py-3 text-zinc-100">{centsToCurrency(aluno.valorCents)}</td>
                             <td className="px-3 py-3 text-zinc-300">{formatDueDate(aluno)}</td>
                             <td className="px-3 py-3">
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusClassName[aluno.status]}`}>
+                              <span className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-medium ${statusClassName[aluno.status]}`}>
                                 {aluno.status}
                               </span>
                             </td>
@@ -775,14 +775,14 @@ export function AlunosView() {
                                 <button
                                   type="button"
                                   onClick={() => cobrarAluno(aluno)}
-                                  className="btn-muted inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs"
+                                  className="btn-muted inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs"
                                 >
                                   <MessageCircle size={14} /> Cobrar
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => openEditModal(aluno)}
-                                  className="btn-muted inline-flex items-center justify-center rounded-lg p-1.5"
+                                  className="btn-muted inline-flex items-center justify-center rounded-md p-1.5"
                                   aria-label={`Editar ${aluno.nome}`}
                                 >
                                   <PenLine size={14} />
@@ -791,7 +791,7 @@ export function AlunosView() {
                                   type="button"
                                   onClick={() => openDeleteModal(aluno)}
                                   disabled={isDeleting}
-                                  className="btn-muted inline-flex items-center justify-center rounded-lg p-1.5 text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="btn-muted inline-flex items-center justify-center rounded-md p-1.5 text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                                   aria-label={`Excluir ${aluno.nome}`}
                                 >
                                   <Trash2 size={14} />
@@ -808,11 +808,11 @@ export function AlunosView() {
           <div className="space-y-2 md:hidden">
             {isLoading
               ? Array.from({ length: 5 }).map((_, index) => (
-                  <Skeleton key={`mobile-skeleton-${index}`} className="h-[136px] rounded-xl" />
+                  <Skeleton key={`mobile-skeleton-${index}`} className="h-[136px] rounded-md" />
                 ))
               : filteredAlunos.length === 0
                 ? (
-                    <p className="surface-soft rounded-xl px-4 py-3 text-sm text-zinc-400">
+                    <p className="surface-soft rounded-md px-4 py-3 text-sm text-zinc-400">
                       Nenhum cliente encontrado para o filtro atual.
                     </p>
                   )
@@ -822,13 +822,13 @@ export function AlunosView() {
                     const isDeleting = deletingStudentId === aluno.id;
 
                     return (
-                      <article key={aluno.id} className="surface-soft rounded-xl p-3">
+                      <article key={aluno.id} className="surface-soft rounded-md p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="text-sm font-semibold text-zinc-100">{aluno.nome}</p>
                             <p className="mt-1 text-xs text-zinc-500">{aluno.telefone}</p>
                           </div>
-                          <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${statusClassName[aluno.status]}`}>
+                          <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] ${statusClassName[aluno.status]}`}>
                             {aluno.status}
                           </span>
                         </div>
@@ -863,14 +863,14 @@ export function AlunosView() {
                           <button
                             type="button"
                             onClick={() => cobrarAluno(aluno)}
-                            className="btn-muted inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs"
+                            className="btn-muted inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs"
                           >
                             <MessageCircle size={13} /> Cobrar
                           </button>
                           <button
                             type="button"
                             onClick={() => openEditModal(aluno)}
-                            className="btn-muted inline-flex items-center justify-center rounded-lg p-1.5"
+                            className="btn-muted inline-flex items-center justify-center rounded-md p-1.5"
                             aria-label={`Editar ${aluno.nome}`}
                           >
                             <PenLine size={14} />
@@ -879,7 +879,7 @@ export function AlunosView() {
                             type="button"
                             onClick={() => openDeleteModal(aluno)}
                             disabled={isDeleting}
-                            className="btn-muted inline-flex items-center justify-center rounded-lg p-1.5 text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="btn-muted inline-flex items-center justify-center rounded-md p-1.5 text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                             aria-label={`Excluir ${aluno.nome}`}
                           >
                             <Trash2 size={14} />
@@ -891,14 +891,14 @@ export function AlunosView() {
           </div>
         </section>
 
-        <aside className="surface rounded-3xl p-4 md:p-5">
+        <aside className="surface rounded-md p-4 md:p-5">
           <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Resumo financeiro</p>
           <div className="mt-3 space-y-2">
-            <div className="surface-soft rounded-xl p-3">
+            <div className="surface-soft rounded-md p-3">
               <p className="text-xs text-zinc-500">Receita prevista (base)</p>
               <p className="mt-1 text-xl font-semibold text-zinc-100">{centsToCurrency(totalPrevistoMes)}</p>
             </div>
-            <div className="surface-soft rounded-xl p-3">
+            <div className="surface-soft rounded-md p-3">
               <p className="text-xs text-zinc-500">Inadimplência aberta</p>
               <p className="mt-1 text-xl font-semibold text-red-300">{centsToCurrency(totalInadimplente)}</p>
             </div>
@@ -908,18 +908,18 @@ export function AlunosView() {
             <p className="text-sm font-semibold text-zinc-100">Prioridades de cobrança</p>
             <div className="mt-3 space-y-2">
               {priorityOverdues.length === 0 ? (
-                <p className="surface-soft rounded-xl px-3 py-2 text-xs text-zinc-400">
+                <p className="surface-soft rounded-md px-3 py-2 text-xs text-zinc-400">
                   Sem clientes inadimplentes no momento.
                 </p>
               ) : (
                 priorityOverdues.map((aluno) => (
-                  <div key={aluno.id} className="surface-soft rounded-xl p-3">
+                  <div key={aluno.id} className="surface-soft rounded-md p-3">
                     <p className="text-sm font-medium text-zinc-100">{aluno.nome}</p>
                     <p className="mt-1 text-xs text-zinc-500">{centsToCurrency(getOpenAmountCents(aluno))}</p>
                     <button
                       type="button"
                       onClick={() => cobrarAluno(aluno)}
-                      className="btn-muted mt-2 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs"
+                      className="btn-muted mt-2 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs"
                     >
                       <MessageCircle size={12} /> Cobrar agora
                     </button>
@@ -932,8 +932,8 @@ export function AlunosView() {
       </div>
 
       {showModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="surface animate-scale-in w-full max-w-xl rounded-2xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="surface animate-scale-in w-full max-w-xl rounded-md p-6">
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-zinc-100">
@@ -949,7 +949,7 @@ export function AlunosView() {
                 type="button"
                 aria-label="Fechar modal"
                 onClick={closeModal}
-                className="btn-muted rounded-lg p-1.5"
+                className="btn-muted rounded-md p-1.5"
               >
                 <X size={16} />
               </button>
@@ -961,7 +961,7 @@ export function AlunosView() {
                 <input
                   value={form.nome}
                   onChange={(event) => setForm((current) => ({ ...current, nome: event.target.value }))}
-                  className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
                   placeholder="Nome completo"
                 />
               </label>
@@ -978,7 +978,7 @@ export function AlunosView() {
                   }
                   inputMode="tel"
                   maxLength={15}
-                  className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
                   placeholder="(11) 90000-0000"
                 />
               </label>
@@ -993,7 +993,7 @@ export function AlunosView() {
                       modalidade: event.target.value as Modalidade,
                     }))
                   }
-                  className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
                 >
                   <option>Mensal</option>
                   <option>Semanal</option>
@@ -1006,7 +1006,7 @@ export function AlunosView() {
                 <input
                   value={form.valor}
                   onChange={(event) => setForm((current) => ({ ...current, valor: event.target.value }))}
-                  className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
                   placeholder="Ex.: 189,90"
                 />
               </label>
@@ -1021,7 +1021,7 @@ export function AlunosView() {
                   type="number"
                   min={1}
                   max={31}
-                  className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
                   placeholder="Ex.: 10"
                 />
               </label>
@@ -1032,7 +1032,7 @@ export function AlunosView() {
                 type="button"
                 onClick={closeModal}
                 disabled={isSaving}
-                className="btn-muted rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-muted rounded-md px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -1040,7 +1040,7 @@ export function AlunosView() {
                 type="button"
                 onClick={() => void saveAluno()}
                 disabled={isSaving}
-                className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+                className="btn-primary rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSaving ? "Salvando..." : modalMode === "create" ? "Salvar" : "Salvar alterações"}
               </button>
@@ -1050,8 +1050,8 @@ export function AlunosView() {
       ) : null}
 
       {showDeleteModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="surface animate-scale-in w-full max-w-md rounded-2xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="surface animate-scale-in w-full max-w-md rounded-md p-6">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-zinc-100">Excluir cliente</h3>
@@ -1064,13 +1064,13 @@ export function AlunosView() {
                 aria-label="Fechar modal"
                 onClick={closeDeleteModal}
                 disabled={isDeleteConfirming}
-                className="btn-muted rounded-lg p-1.5 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-muted rounded-md p-1.5 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
               {alunoToDelete
                 ? `Confirma a exclusão de ${alunoToDelete.nome}?`
                 : "Confirma a exclusão deste cliente?"}
@@ -1081,7 +1081,7 @@ export function AlunosView() {
                 type="button"
                 onClick={closeDeleteModal}
                 disabled={isDeleteConfirming}
-                className="btn-muted rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-muted rounded-md px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -1089,7 +1089,7 @@ export function AlunosView() {
                 type="button"
                 onClick={() => void confirmDeleteAluno()}
                 disabled={isDeleteConfirming}
-                className="inline-flex items-center justify-center rounded-xl border border-red-500/40 bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center rounded-md border border-red-500/40 bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDeleteConfirming ? "Excluindo..." : "Excluir"}
               </button>
@@ -1100,3 +1100,6 @@ export function AlunosView() {
     </section>
   );
 }
+
+
+

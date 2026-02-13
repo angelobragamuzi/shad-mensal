@@ -4,6 +4,8 @@ interface SkeletonProps {
 
 export function Skeleton({ className = "" }: SkeletonProps) {
   return (
-    <div className={`animate-shimmer relative overflow-hidden rounded-xl bg-zinc-900/80 ${className}`} />
+    <div
+      className={`animate-shimmer relative overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card-soft)] ${className}`}
+    />
   );
 }

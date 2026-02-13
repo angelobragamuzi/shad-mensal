@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
@@ -213,7 +213,7 @@ export function CalendarioView() {
 
   return (
     <section className="animate-fade-up space-y-4">
-      <header className="surface rounded-3xl border-l-4 border-amber-400/60 px-4 py-6 pl-5 md:px-6 md:py-7 md:pl-7">
+      <header className="surface rounded-md border-l-2 border-[var(--accent)] px-4 py-6 md:px-6 md:py-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">Controle</p>
@@ -226,13 +226,13 @@ export function CalendarioView() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <div className="surface-soft rounded-2xl px-3 py-2">
+            <div className="surface-soft rounded-md px-3 py-2">
               <p className="text-xs text-zinc-500">Total do mes</p>
               <p className="mt-1 text-sm font-semibold text-zinc-100">
                 {centsToCurrency(totalMonthCents)}
               </p>
             </div>
-            <div className="surface-soft rounded-2xl px-3 py-2">
+            <div className="surface-soft rounded-md px-3 py-2">
               <p className="text-xs text-zinc-500">Dias marcados</p>
               <p className="mt-1 text-sm font-semibold text-zinc-100">{itemsByDate.size}</p>
             </div>
@@ -241,7 +241,7 @@ export function CalendarioView() {
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="surface rounded-3xl p-4 md:p-5">
+        <div className="surface rounded-md p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
@@ -255,7 +255,7 @@ export function CalendarioView() {
               <button
                 type="button"
                 onClick={handlePrevMonth}
-                className="btn-muted inline-flex items-center justify-center rounded-lg p-2"
+                className="btn-muted inline-flex items-center justify-center rounded-md p-2"
                 aria-label="Mes anterior"
               >
                 <ChevronLeft size={16} />
@@ -263,7 +263,7 @@ export function CalendarioView() {
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="btn-muted inline-flex items-center justify-center rounded-lg p-2"
+                className="btn-muted inline-flex items-center justify-center rounded-md p-2"
                 aria-label="Proximo mes"
               >
                 <ChevronRight size={16} />
@@ -271,14 +271,14 @@ export function CalendarioView() {
               <button
                 type="button"
                 onClick={handleToday}
-                className="btn-muted rounded-lg px-3 py-2 text-xs"
+                className="btn-muted rounded-md px-3 py-2 text-xs"
               >
                 Hoje
               </button>
               <button
                 type="button"
                 onClick={() => void loadCalendar()}
-                className="btn-muted inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
+                className="btn-muted inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs"
               >
                 <RefreshCcw size={14} />
                 Atualizar
@@ -287,7 +287,7 @@ export function CalendarioView() {
           </div>
 
           {errorMessage ? (
-            <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <p className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
               {errorMessage}
             </p>
           ) : null}
@@ -303,7 +303,7 @@ export function CalendarioView() {
           <div className="mt-3 grid grid-cols-7 gap-2">
             {isLoading
               ? Array.from({ length: 35 }).map((_, index) => (
-                  <Skeleton key={`calendar-skeleton-${index}`} className="h-12 rounded-lg" />
+                  <Skeleton key={`calendar-skeleton-${index}`} className="h-12 rounded-md" />
                 ))
               : calendarDays.map((day, index) => {
                   if (!day) {
@@ -321,7 +321,7 @@ export function CalendarioView() {
                       key={day.iso}
                       onClick={() => setSelectedDate(day.iso)}
                       className={[
-                        "group flex h-12 flex-col items-center justify-center rounded-lg border text-sm transition",
+                        "group flex h-12 flex-col items-center justify-center rounded-md border text-sm transition",
                         isSelected
                           ? "border-white/40 bg-white/10 text-zinc-100"
                           : "border-transparent text-zinc-300 hover:border-white/20 hover:bg-white/5",
@@ -331,7 +331,7 @@ export function CalendarioView() {
                     >
                       <span className="text-sm font-semibold">{day.date.getDate()}</span>
                       {hasItems ? (
-                        <span className="mt-1 inline-flex items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-200">
+                        <span className="mt-1 inline-flex items-center justify-center rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-200">
                           {count}
                         </span>
                       ) : null}
@@ -345,13 +345,13 @@ export function CalendarioView() {
           ) : null}
         </div>
 
-        <aside className="surface rounded-3xl p-4 md:p-5">
+        <aside className="surface rounded-md p-4 md:p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-zinc-100">Recebimentos do dia</p>
               <p className="mt-1 text-xs text-zinc-500">{selectedDateLabel}</p>
             </div>
-            <div className="surface-soft rounded-xl px-3 py-1.5 text-xs text-zinc-300">
+            <div className="surface-soft rounded-md px-3 py-1.5 text-xs text-zinc-300">
               Total: {centsToCurrency(selectedTotalCents)}
             </div>
           </div>
@@ -359,17 +359,17 @@ export function CalendarioView() {
           <div className="mt-4 space-y-3">
             {isLoading ? (
               Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={`list-skeleton-${index}`} className="h-16 rounded-xl" />
+                <Skeleton key={`list-skeleton-${index}`} className="h-16 rounded-md" />
               ))
             ) : selectedItems.length === 0 ? (
-              <p className="surface-soft rounded-xl px-3 py-2 text-sm text-zinc-400">
+              <p className="surface-soft rounded-md px-3 py-2 text-sm text-zinc-400">
                 Nenhum recebimento previsto para este dia.
               </p>
             ) : (
               selectedItems.map((item) => {
                 const statusLabel = mapInvoiceStatus(item.status);
                 return (
-                  <div key={item.id} className="surface-soft rounded-xl p-3">
+                  <div key={item.id} className="surface-soft rounded-md p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-zinc-100">{item.nome}</p>
@@ -378,7 +378,7 @@ export function CalendarioView() {
                         </p>
                       </div>
                       <span
-                        className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${statusTone[statusLabel]}`}
+                        className={`inline-flex rounded-md border px-2 py-1 text-[11px] ${statusTone[statusLabel]}`}
                       >
                         {statusLabel}
                       </span>
@@ -396,3 +396,5 @@ export function CalendarioView() {
     </section>
   );
 }
+
+
