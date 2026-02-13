@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, LayoutDashboard, LogOut, Menu, UsersRound, X } from "lucide-react";
+import { Building2, CalendarDays, LayoutDashboard, LogOut, Menu, UsersRound, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { getUserOrgContext } from "@/lib/supabase/auth-org";
 
 interface AppShellProps {
   children: ReactNode;
@@ -20,6 +21,7 @@ const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/clientes", icon: UsersRound },
   { label: "Calendário", href: "/calendario", icon: CalendarDays },
+  { label: "Organização", href: "/organizacao", icon: Building2 },
 ];
 
 export function AppShell({ children }: AppShellProps) {
@@ -29,6 +31,7 @@ export function AppShell({ children }: AppShellProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState<"owner" | "admin" | "staff" | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -48,6 +51,16 @@ export function AppShell({ children }: AppShellProps) {
         if (!ignore && session?.user.email) {
           setUserEmail(session.user.email);
         }
+
+        const { data: orgContext, error: orgError } = await getUserOrgContext(supabase);
+        if (!ignore && (orgError || !orgContext)) {
+          router.replace("/onboarding");
+          return;
+        }
+
+        if (!ignore && orgContext) {
+          setUserRole(orgContext.role);
+        }
       } finally {
         if (!ignore) {
           setIsAuthChecking(false);
@@ -59,12 +72,18 @@ export function AppShell({ children }: AppShellProps) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session) {
         router.replace("/login");
         return;
       }
       setUserEmail(session.user.email ?? "");
+      const { data: orgContext } = await getUserOrgContext(supabase);
+      if (!orgContext) {
+        router.replace("/onboarding");
+        return;
+      }
+      setUserRole(orgContext.role);
     });
 
     return () => {
@@ -146,6 +165,9 @@ export function AppShell({ children }: AppShellProps) {
           <div className="mt-auto border-t border-white/10 pt-4">
             <p className="text-xs text-zinc-500">Usuário</p>
             <p className="mt-1 truncate text-sm font-medium text-zinc-200">{userName}</p>
+            {userRole ? (
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-zinc-500">{userRole}</p>
+            ) : null}
             <button
               type="button"
               onClick={handleLogout}

@@ -5,10 +5,21 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 interface UserOrgContext {
   user: User;
   organizationId: string;
+  role: "owner" | "admin" | "staff";
 }
 
+type CachedContext = {
+  userId: string;
+  data: UserOrgContext;
+  cachedAt: number;
+};
+
+const CACHE_TTL_MS = 60_000;
+let cachedContext: CachedContext | null = null;
+
 export async function getUserOrgContext(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  options?: { force?: boolean }
 ): Promise<{ data: UserOrgContext | null; error: string | null }> {
   const {
     data: { session },
@@ -20,12 +31,23 @@ export async function getUserOrgContext(
   }
 
   if (!session?.user) {
+    cachedContext = null;
     return { data: null, error: "Não autenticado." };
+  }
+
+  const now = Date.now();
+  if (
+    !options?.force &&
+    cachedContext &&
+    cachedContext.userId === session.user.id &&
+    now - cachedContext.cachedAt < CACHE_TTL_MS
+  ) {
+    return { data: cachedContext.data, error: null };
   }
 
   const { data: membership, error: membershipError } = await supabase
     .from("organization_members")
-    .select("organization_id")
+    .select("organization_id, role")
     .eq("user_id", session.user.id)
     .limit(1)
     .maybeSingle();
@@ -35,14 +57,21 @@ export async function getUserOrgContext(
   }
 
   if (!membership?.organization_id) {
+    cachedContext = null;
     return { data: null, error: "Usuário sem organização vinculada." };
   }
 
-  return {
-    data: {
-      user: session.user,
-      organizationId: membership.organization_id as string,
-    },
-    error: null,
+  const data: UserOrgContext = {
+    user: session.user,
+    organizationId: membership.organization_id as string,
+    role: (membership.role as UserOrgContext["role"]) ?? "staff",
   };
+
+  cachedContext = {
+    userId: session.user.id,
+    data,
+    cachedAt: now,
+  };
+
+  return { data, error: null };
 }

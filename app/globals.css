@@ -56,13 +56,11 @@ body {
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(
-      45deg,
+    repeating-linear-gradient(45deg,
       rgba(255, 255, 255, 0.03) 0,
       rgba(255, 255, 255, 0.03) 1px,
       transparent 1px,
-      transparent 10px
-    ),
+      transparent 10px),
     linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: auto, 140px 140px, 140px 140px;
@@ -100,12 +98,10 @@ body {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(
-    100deg,
-    transparent 15%,
-    rgba(255, 255, 255, 0.08) 45%,
-    transparent 75%
-  );
+  background: linear-gradient(100deg,
+      transparent 15%,
+      rgba(255, 255, 255, 0.08) 45%,
+      transparent 75%);
   animation: shimmer 1.2s infinite;
 }
 
@@ -149,6 +145,7 @@ body {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -160,6 +157,7 @@ body {
     opacity: 0;
     transform: scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
