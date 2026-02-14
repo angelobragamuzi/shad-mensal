@@ -33,8 +33,9 @@ Abra `http://localhost:3000`.
 
 1. Acessar `/login`.
 2. Login com email/senha do usuario criado no Supabase Auth.
-3. Redirecionamento para `/dashboard`.
-4. Tela `/clientes` lendo e gravando no banco:
+3. Se for o primeiro acesso sem organizacao, criar em `/onboarding`.
+4. Redirecionamento para `/dashboard`.
+5. Tela `/clientes` lendo e gravando no banco:
    - listar clientes reais
    - criar novo cliente (ja cria primeira fatura)
    - marcar como pago (insere em `payments` e atualiza fatura via trigger)

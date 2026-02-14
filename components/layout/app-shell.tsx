@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays, LayoutDashboard, LogOut, Menu, UsersRound, X } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { getUserOrgContext } from "@/lib/supabase/auth-org";
 
 interface AppShellProps {
   children: ReactNode;
@@ -30,6 +31,7 @@ export function AppShell({ children }: AppShellProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState<"owner" | "admin" | "staff" | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -49,6 +51,16 @@ export function AppShell({ children }: AppShellProps) {
         if (!ignore && session?.user.email) {
           setUserEmail(session.user.email);
         }
+
+        const { data: orgContext, error: orgError } = await getUserOrgContext(supabase);
+        if (!ignore && (orgError || !orgContext)) {
+          router.replace("/onboarding");
+          return;
+        }
+
+        if (!ignore && orgContext) {
+          setUserRole(orgContext.role);
+        }
       } finally {
         if (!ignore) {
           setIsAuthChecking(false);
@@ -60,12 +72,18 @@ export function AppShell({ children }: AppShellProps) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session) {
         router.replace("/login");
         return;
       }
       setUserEmail(session.user.email ?? "");
+      const { data: orgContext } = await getUserOrgContext(supabase);
+      if (!orgContext) {
+        router.replace("/onboarding");
+        return;
+      }
+      setUserRole(orgContext.role);
     });
 
     return () => {

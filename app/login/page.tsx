@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { getUserOrgContext } from "@/lib/supabase/auth-org";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,7 +25,9 @@ export default function LoginPage() {
         } = await supabase.auth.getSession();
 
         if (!ignore && session) {
-          router.replace("/dashboard");
+          const supabase = getSupabaseBrowserClient();
+          const { data: orgContext } = await getUserOrgContext(supabase);
+          router.replace(orgContext ? "/dashboard" : "/onboarding");
           return;
         }
       } catch (error) {
@@ -63,7 +66,8 @@ export default function LoginPage() {
         return;
       }
 
-      router.replace("/dashboard");
+      const { data: orgContext } = await getUserOrgContext(supabase);
+      router.replace(orgContext ? "/dashboard" : "/onboarding");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha inesperada ao autenticar.";
       setErrorMessage(message);
