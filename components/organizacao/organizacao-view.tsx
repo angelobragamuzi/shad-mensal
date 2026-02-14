@@ -1,70 +1,76 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Building2, RefreshCcw, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import { Palette, RefreshCcw } from "lucide-react";
+import {
+  DEFAULT_SITE_ACCENT_COLOR,
+  emitBrandingChange,
+  normalizeHexColor,
+} from "@/lib/shad-manager/branding";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { getUserOrgContext } from "@/lib/supabase/auth-org";
 
-const roleLabels: Record<"owner" | "admin" | "staff", string> = {
-  owner: "Proprietario",
-  admin: "Administrador",
-  staff: "Equipe",
-};
-
-interface OrgMemberRow {
-  user_id: string;
-  email: string;
-  role: "owner" | "admin" | "staff";
-  created_at: string;
+interface BrandingSettingsRow {
+  site_logo_url: string | null;
+  site_accent_color: string | null;
 }
 
-interface OrgInfo {
-  id: string;
-  name: string;
-  slug: string;
-  active: boolean;
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+type OrgRole = "owner" | "admin" | "staff";
 
 export function OrganizacaoView() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [orgInfo, setOrgInfo] = useState<OrgInfo | null>(null);
-  const [members, setMembers] = useState<OrgMemberRow[]>([]);
-  const [userRole, setUserRole] = useState<"owner" | "admin" | "staff">("staff");
-  const [userId, setUserId] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [organizationName, setOrganizationName] = useState("Sua empresa");
+  const [userRole, setUserRole] = useState<OrgRole>("staff");
 
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [isAddingMember, setIsAddingMember] = useState(false);
-  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
-  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [siteLogoUrl, setSiteLogoUrl] = useState("");
+  const [siteAccentColor, setSiteAccentColor] = useState(DEFAULT_SITE_ACCENT_COLOR);
+  const [isBrandingColumnsAvailable, setIsBrandingColumnsAvailable] = useState(true);
 
-  const [orgName, setOrgName] = useState("");
-  const [orgSlug, setOrgSlug] = useState("");
-  const [timezone, setTimezone] = useState("America/Sao_Paulo");
-  const [currencyCode, setCurrencyCode] = useState("BRL");
-  const [whatsTemplate, setWhatsTemplate] = useState("");
-
-  const [newMemberEmail, setNewMemberEmail] = useState("");
-  const [newMemberRole, setNewMemberRole] = useState<"owner" | "admin" | "staff">("staff");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
-  const canManageMembers = userRole === "owner" || userRole === "admin";
   const canManageSettings = userRole === "owner" || userRole === "admin";
+  const normalizedAccentColor = normalizeHexColor(siteAccentColor);
 
-  const loadOrganization = useCallback(async () => {
+  const handleLogoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setErrorMessage("Selecione um arquivo de imagem para a logo.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMessage("Logo muito grande. Use uma imagem de até 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSiteLogoUrl(String(reader.result ?? ""));
+      setSuccessMessage("Logo carregada. Clique em salvar personalização.");
+      setErrorMessage(null);
+    };
+    reader.onerror = () => {
+      setErrorMessage("Não foi possível ler o arquivo da logo.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAccentHexInput = (value: string) => {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      setSiteAccentColor(DEFAULT_SITE_ACCENT_COLOR);
+      return;
+    }
+
+    const withHash = normalized.startsWith("#") ? normalized : `#${normalized}`;
+    setSiteAccentColor(withHash.slice(0, 7));
+  };
+
+  const loadBrandingSettings = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -72,52 +78,60 @@ export function OrganizacaoView() {
     try {
       const supabase = getSupabaseBrowserClient();
       const { data: orgContext, error: orgError } = await getUserOrgContext(supabase);
+
       if (orgError || !orgContext) {
-        throw new Error(orgError ?? "Falha ao validar organizacao.");
+        throw new Error(orgError ?? "Falha ao validar a organização.");
       }
 
-      setUserRole(orgContext.role);
-      setUserId(orgContext.user.id);
+      setUserRole(orgContext.role as OrgRole);
+      setOrganizationId(orgContext.organizationId);
 
       const [orgResponse, settingsResponse] = await Promise.all([
         supabase
           .from("organizations")
-          .select("id, name, slug, active")
+          .select("name")
           .eq("id", orgContext.organizationId)
           .maybeSingle(),
         supabase
           .from("organization_settings")
-          .select("timezone, currency_code, whatsapp_template")
+          .select("site_logo_url, site_accent_color")
           .eq("organization_id", orgContext.organizationId)
           .maybeSingle(),
       ]);
 
-      if (orgResponse.error) throw new Error(orgResponse.error.message);
-      if (settingsResponse.error) throw new Error(settingsResponse.error.message);
-
-      if (orgResponse.data) {
-        setOrgInfo(orgResponse.data as OrgInfo);
-        setOrgName(orgResponse.data.name ?? "");
-        setOrgSlug(orgResponse.data.slug ?? "");
+      if (orgResponse.error) {
+        throw new Error(orgResponse.error.message);
       }
 
-      if (settingsResponse.data) {
-        setTimezone(settingsResponse.data.timezone ?? "America/Sao_Paulo");
-        setCurrencyCode(settingsResponse.data.currency_code ?? "BRL");
-        setWhatsTemplate(settingsResponse.data.whatsapp_template ?? "");
+      setOrganizationName(orgResponse.data?.name?.trim() || "Sua empresa");
+
+      if (settingsResponse.error) {
+        const normalizedMessage = settingsResponse.error.message.toLowerCase();
+        const missingLogoColumn =
+          normalizedMessage.includes("site_logo_url") && normalizedMessage.includes("does not exist");
+        const missingAccentColumn =
+          normalizedMessage.includes("site_accent_color") &&
+          normalizedMessage.includes("does not exist");
+
+        if (missingLogoColumn || missingAccentColumn) {
+          setIsBrandingColumnsAvailable(false);
+          setSiteLogoUrl("");
+          setSiteAccentColor(DEFAULT_SITE_ACCENT_COLOR);
+          return;
+        }
+
+        throw new Error(settingsResponse.error.message);
       }
 
-      if (orgContext.role === "owner" || orgContext.role === "admin") {
-        const membersResponse = await supabase.rpc("get_org_members", {
-          p_org_id: orgContext.organizationId,
-        });
-        if (membersResponse.error) throw new Error(membersResponse.error.message);
-        setMembers((membersResponse.data ?? []) as OrgMemberRow[]);
-      } else {
-        setMembers([]);
-      }
+      setIsBrandingColumnsAvailable(true);
+      const branding = settingsResponse.data as BrandingSettingsRow | null;
+      setSiteLogoUrl(branding?.site_logo_url?.trim() ?? "");
+      setSiteAccentColor(normalizeHexColor(branding?.site_accent_color));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro ao carregar organizacao.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar as configurações de personalização.";
       setErrorMessage(message);
     } finally {
       setIsLoading(false);
@@ -125,185 +139,144 @@ export function OrganizacaoView() {
   }, []);
 
   useEffect(() => {
-    void loadOrganization();
-  }, [loadOrganization]);
+    void loadBrandingSettings();
+  }, [loadBrandingSettings]);
 
-  const handleSaveSettings = async () => {
-    if (!orgInfo) return;
+  const handleSaveBranding = async () => {
+    if (!organizationId) {
+      setErrorMessage("Organização não encontrada.");
+      return;
+    }
+
     if (!canManageSettings) {
-      setErrorMessage("Voce nao possui permissao para atualizar os dados.");
+      setErrorMessage("Você não possui permissão para alterar a personalização.");
       return;
     }
 
-    const trimmedName = orgName.trim();
-    const trimmedSlug = orgSlug.trim();
-    const slugIsValid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(trimmedSlug);
-
-    if (!trimmedName) {
-      setErrorMessage("Informe o nome da empresa.");
+    if (!isBrandingColumnsAvailable) {
+      setErrorMessage(
+        "Seu banco ainda não possui as colunas de personalização. Execute a migration 202602140002."
+      );
       return;
     }
 
-    if (!slugIsValid) {
-      setErrorMessage("Identificador invalido. Use apenas letras, numeros e hifen.");
-      return;
-    }
-
-    setIsSavingSettings(true);
+    setIsSaving(true);
     setErrorMessage(null);
     setSuccessMessage(null);
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const [orgUpdate, settingsUpdate] = await Promise.all([
-        supabase
-          .from("organizations")
-          .update({ name: trimmedName, slug: trimmedSlug })
-          .eq("id", orgInfo.id),
-        supabase
-          .from("organization_settings")
-          .update({
-            timezone: timezone.trim(),
-            currency_code: currencyCode.trim().toUpperCase(),
-            whatsapp_template: whatsTemplate.trim(),
-          })
-          .eq("organization_id", orgInfo.id),
-      ]);
+      const { error } = await supabase
+        .from("organization_settings")
+        .update({
+          site_logo_url: siteLogoUrl.trim(),
+          site_accent_color: normalizeHexColor(siteAccentColor),
+        })
+        .eq("organization_id", organizationId);
 
-      if (orgUpdate.error) throw new Error(orgUpdate.error.message);
-      if (settingsUpdate.error) throw new Error(settingsUpdate.error.message);
+      if (error) {
+        const normalizedMessage = error.message.toLowerCase();
+        const missingLogoColumn =
+          normalizedMessage.includes("site_logo_url") && normalizedMessage.includes("does not exist");
+        const missingAccentColumn =
+          normalizedMessage.includes("site_accent_color") &&
+          normalizedMessage.includes("does not exist");
 
-      setSuccessMessage("Dados salvos.");
-      await loadOrganization();
+        if (missingLogoColumn || missingAccentColumn) {
+          setIsBrandingColumnsAvailable(false);
+          throw new Error(
+            "As colunas de personalização ainda não existem no banco. Execute a migration 202602140002."
+          );
+        }
+
+        throw new Error(error.message);
+      }
+
+      setSiteAccentColor(normalizeHexColor(siteAccentColor));
+      emitBrandingChange({
+        logoUrl: siteLogoUrl.trim(),
+        accentColor: normalizeHexColor(siteAccentColor),
+      });
+      setSuccessMessage("Personalização salva com sucesso.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro ao salvar dados.";
+      const message =
+        error instanceof Error ? error.message : "Não foi possível salvar a personalização.";
       setErrorMessage(message);
     } finally {
-      setIsSavingSettings(false);
+      setIsSaving(false);
     }
   };
 
-  const handleAddMember = async () => {
-    if (!orgInfo) return;
-    if (!canManageMembers) {
-      setErrorMessage("Voce nao possui permissao para adicionar membros.");
+  const handleResetBranding = async () => {
+    if (!organizationId) {
+      setErrorMessage("Organização não encontrada.");
       return;
     }
 
-    const email = newMemberEmail.trim();
-    if (!email) {
-      setErrorMessage("Informe o email do usuario.");
+    if (!canManageSettings) {
+      setErrorMessage("Você não possui permissão para alterar a personalização.");
       return;
     }
 
-    setIsAddingMember(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.rpc("add_org_member_by_email", {
-        p_org_id: orgInfo.id,
-        p_email: email,
-        p_role: newMemberRole,
-      });
-
-      if (error) throw new Error(error.message);
-
-      setNewMemberEmail("");
-      setNewMemberRole("staff");
-      setSuccessMessage("Membro adicionado com sucesso.");
-      await loadOrganization();
-    } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : "Erro ao adicionar membro.";
-      if (rawMessage.toLowerCase().includes("user not found")) {
-        setErrorMessage("Usuario nao encontrado no Supabase Auth.");
-      } else {
-        setErrorMessage(rawMessage);
-      }
-    } finally {
-      setIsAddingMember(false);
+    if (!isBrandingColumnsAvailable) {
+      setErrorMessage(
+        "Seu banco ainda não possui as colunas de personalização. Execute a migration 202602140002."
+      );
+      return;
     }
-  };
 
-  const handleUpdateMemberRole = async (memberId: string, role: "owner" | "admin" | "staff") => {
-    if (!orgInfo) return;
-    if (!canManageMembers) return;
-
-    setEditingMemberId(memberId);
+    setIsSaving(true);
     setErrorMessage(null);
     setSuccessMessage(null);
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.rpc("update_org_member_role", {
-        p_org_id: orgInfo.id,
-        p_user_id: memberId,
-        p_role: role,
-      });
+      const { error } = await supabase
+        .from("organization_settings")
+        .update({
+          site_logo_url: "",
+          site_accent_color: DEFAULT_SITE_ACCENT_COLOR,
+        })
+        .eq("organization_id", organizationId);
 
-      if (error) throw new Error(error.message);
-      setSuccessMessage("Permissoes atualizadas.");
-      await loadOrganization();
-    } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : "Erro ao atualizar permissao.";
-      if (rawMessage.toLowerCase().includes("cannot remove last owner")) {
-        setErrorMessage("Voce nao pode remover o ultimo owner.");
-      } else {
-        setErrorMessage(rawMessage);
+      if (error) {
+        throw new Error(error.message);
       }
-    } finally {
-      setEditingMemberId(null);
-    }
-  };
 
-  const handleRemoveMember = async (memberId: string) => {
-    if (!orgInfo) return;
-    if (!canManageMembers) return;
-
-    setRemovingMemberId(memberId);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.rpc("remove_org_member", {
-        p_org_id: orgInfo.id,
-        p_user_id: memberId,
+      setSiteLogoUrl("");
+      setSiteAccentColor(DEFAULT_SITE_ACCENT_COLOR);
+      emitBrandingChange({
+        logoUrl: "",
+        accentColor: DEFAULT_SITE_ACCENT_COLOR,
       });
-
-      if (error) throw new Error(error.message);
-      setSuccessMessage("Membro removido.");
-      await loadOrganization();
+      setSuccessMessage("Personalização restaurada para o padrão.");
     } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : "Erro ao remover membro.";
-      if (rawMessage.toLowerCase().includes("cannot remove last owner")) {
-        setErrorMessage("Voce nao pode remover o ultimo owner.");
-      } else {
-        setErrorMessage(rawMessage);
-      }
+      const message =
+        error instanceof Error ? error.message : "Não foi possível restaurar a personalização padrão.";
+      setErrorMessage(message);
     } finally {
-      setRemovingMemberId(null);
+      setIsSaving(false);
     }
   };
 
   return (
     <section className="animate-fade-up space-y-4">
       <header className="surface rounded-3xl border-l-4 border-amber-400/60 px-4 py-6 pl-5 md:px-6 md:py-7 md:pl-7">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-3xl font-semibold leading-tight text-zinc-100 sm:text-4xl">
-              Minha empresa
+              Personalização da instância
             </h2>
             <p className="mt-2 text-sm text-zinc-300">
-              Atualize os dados da empresa e convide pessoas para o painel.
+              Ajuste a identidade visual da sua conta com cores e logo personalizadas.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() => void loadOrganization()}
-            className="btn-muted inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+            onClick={() => void loadBrandingSettings()}
+            disabled={isLoading}
+            className="btn-muted inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
           >
             <RefreshCcw size={14} />
             Atualizar
@@ -323,238 +296,116 @@ export function OrganizacaoView() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-        <section className="surface rounded-3xl p-4 md:p-5">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-100">Equipe</h3>
-              <p className="mt-1 text-sm text-zinc-400">Convide pessoas e defina o acesso.</p>
-            </div>
-            <div className="surface-soft inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-zinc-400">
-              <UsersRound size={14} />
-              {members.length} pessoas
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-[1.3fr_0.7fr_0.4fr]">
-            <label className="block text-left">
-              <span className="mb-2 block text-sm text-zinc-300">Email da pessoa</span>
-              <input
-                value={newMemberEmail}
-                onChange={(event) => setNewMemberEmail(event.target.value)}
-                className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
-                placeholder="usuario@empresa.com"
-                disabled={!canManageMembers}
-              />
-            </label>
-            <label className="block text-left">
-              <span className="mb-2 block text-sm text-zinc-300">Nivel de acesso</span>
-              <select
-                value={newMemberRole}
-                onChange={(event) => setNewMemberRole(event.target.value as "owner" | "admin" | "staff")}
-                className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
-                disabled={!canManageMembers}
-              >
-                <option value="staff">Equipe</option>
-                <option value="admin">Administrador</option>
-                {userRole === "owner" ? <option value="owner">Proprietario</option> : null}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => void handleAddMember()}
-              disabled={isAddingMember || !canManageMembers}
-              className="btn-primary inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <UserPlus size={14} />
-              {isAddingMember ? "Adicionando..." : "Convidar"}
-            </button>
-          </div>
-          <p className="mt-3 text-xs text-zinc-500">
-            Equipe usa o painel. Administrador gerencia equipe e dados. Proprietario tem controle total.
-          </p>
-
-          <div className="mt-6 space-y-2">
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={`member-skeleton-${index}`} className="h-16 rounded-xl" />
-              ))
-            ) : !canManageMembers ? (
-              <div className="surface-soft rounded-xl px-4 py-3 text-sm text-zinc-400">
-                Seu perfil nao possui permissao para ver a equipe.
-              </div>
-            ) : members.length === 0 ? (
-              <div className="surface-soft rounded-xl px-4 py-3 text-sm text-zinc-400">
-                Nenhuma pessoa adicionada ainda.
-              </div>
-            ) : (
-              members.map((member) => {
-                const isSelf = member.user_id === userId;
-                const isOwner = member.role === "owner";
-                const isEditing = editingMemberId === member.user_id;
-                const isRemoving = removingMemberId === member.user_id;
-
-                return (
-                  <div
-                    key={member.user_id}
-                    className="surface-soft flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-100">{member.email}</p>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        Entrou em {new Intl.DateTimeFormat("pt-BR").format(new Date(member.created_at))}
-                        {isSelf ? " • voce" : ""}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-300">
-                        <ShieldCheck size={12} />
-                        {roleLabels[member.role]}
-                      </div>
-                      <select
-                        value={member.role}
-                        disabled={!canManageMembers || isOwner || isEditing}
-                        onChange={(event) =>
-                          void handleUpdateMemberRole(
-                            member.user_id,
-                            event.target.value as "owner" | "admin" | "staff"
-                          )
-                        }
-                        className="field h-9 rounded-lg px-2 text-xs"
-                      >
-                        <option value="staff">Equipe</option>
-                        <option value="admin">Administrador</option>
-                        {userRole === "owner" ? <option value="owner">Proprietario</option> : null}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => void handleRemoveMember(member.user_id)}
-                        disabled={!canManageMembers || isOwner || isSelf || isRemoving}
-                        className="btn-muted rounded-lg px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isRemoving ? "Removendo..." : "Remover"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-
-        <aside className="space-y-4">
-          <section className="surface rounded-3xl p-4 md:p-5">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-100">Dados da empresa</h3>
-                <p className="mt-1 text-sm text-zinc-400">Informacoes basicas da sua empresa.</p>
-              </div>
-              <div className="surface-soft inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-zinc-400">
-                <Building2 size={14} />
-                {orgInfo?.active ? "Ativa" : "Inativa"}
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <label className="block">
-                <span className="mb-2 block text-sm text-zinc-300">Nome da empresa</span>
-                <input
-                  value={orgName}
-                  onChange={(event) => setOrgName(event.target.value)}
-                  className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
-                  placeholder="Nome da empresa"
-                  disabled={!canManageSettings}
-                />
-              </label>
-
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-zinc-400">
-                Esse identificador ajuda o sistema a reconhecer sua empresa. Se nao souber, deixe
-                como esta.
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowAdvanced((current) => !current)}
-                className="btn-muted inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs"
-              >
-                {showAdvanced ? "Esconder opcoes avancadas" : "Mostrar opcoes avancadas"}
-              </button>
-
-              {showAdvanced ? (
-                <label className="block">
-                  <span className="mb-2 block text-sm text-zinc-300">Identificador interno</span>
-                  <input
-                    value={orgSlug}
-                    onChange={(event) => setOrgSlug(event.target.value)}
-                    className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
-                    placeholder={slugify(orgName || "sua-empresa")}
-                    disabled={!canManageSettings}
-                  />
-                </label>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="surface rounded-3xl p-4 md:p-5">
-            <h3 className="text-lg font-semibold text-zinc-100">Cobranca</h3>
+      <section className="surface rounded-3xl p-4 md:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-100">Visual do painel</h3>
             <p className="mt-1 text-sm text-zinc-400">
-              Mensagem padrao para cobrar clientes no WhatsApp.
+              Empresa: {organizationName}
             </p>
-            <div className="mt-3 space-y-3">
-              <label className="block">
-                <span className="mb-2 block text-sm text-zinc-300">Mensagem padrão</span>
-                <textarea
-                  value={whatsTemplate}
-                  onChange={(event) => setWhatsTemplate(event.target.value)}
-                  className="field glow-focus min-h-[120px] w-full rounded-xl px-3 py-2 text-sm outline-none"
-                  placeholder="Ola {{student_name}}, sua mensalidade esta em aberto. Podemos regularizar hoje?"
-                  disabled={!canManageSettings}
+          </div>
+          <div className="surface-soft inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-zinc-400">
+            <Palette size={14} />
+            Branding
+          </div>
+        </div>
+
+        {!isBrandingColumnsAvailable ? (
+          <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+            As colunas de personalização ainda não existem no banco. Execute a migration
+            `202602140002_shad-manager_site-branding.sql`.
+          </div>
+        ) : null}
+
+        {!canManageSettings ? (
+          <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+            Seu perfil pode visualizar, mas apenas administrador/proprietário pode salvar alterações.
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+          <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-sm text-zinc-300">Cor principal</span>
+              <div className="grid gap-2 sm:grid-cols-[58px_1fr]">
+                <input
+                  type="color"
+                  value={normalizedAccentColor}
+                  onChange={(event) => setSiteAccentColor(normalizeHexColor(event.target.value))}
+                  className="field h-11 w-full cursor-pointer rounded-xl p-1"
+                  disabled={!canManageSettings || !isBrandingColumnsAvailable || isLoading}
                 />
-                <p className="mt-2 text-xs text-zinc-500">
-                  Use {"{student_name}"} para inserir o nome.
-                </p>
-              </label>
-            </div>
-
-            {showAdvanced ? (
-              <div className="mt-4 space-y-3">
-                <label className="block">
-                  <span className="mb-2 block text-sm text-zinc-300">Timezone</span>
-                  <input
-                    value={timezone}
-                    onChange={(event) => setTimezone(event.target.value)}
-                    className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
-                    placeholder="America/Sao_Paulo"
-                    disabled={!canManageSettings}
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm text-zinc-300">Moeda</span>
-                  <input
-                    value={currencyCode}
-                    onChange={(event) => setCurrencyCode(event.target.value)}
-                    className="field glow-focus h-11 w-full rounded-xl px-3 text-sm outline-none"
-                    placeholder="BRL"
-                    maxLength={3}
-                    disabled={!canManageSettings}
-                  />
-                </label>
+                <input
+                  value={siteAccentColor}
+                  onChange={(event) => handleAccentHexInput(event.target.value)}
+                  onBlur={() => setSiteAccentColor(normalizeHexColor(siteAccentColor))}
+                  className="field glow-focus h-11 w-full rounded-xl px-3 text-sm uppercase outline-none"
+                  placeholder="#F07F1D"
+                  maxLength={7}
+                  disabled={!canManageSettings || !isBrandingColumnsAvailable || isLoading}
+                />
               </div>
-            ) : null}
+              <p className="mt-2 text-xs text-zinc-500">Formato aceito: #RRGGBB.</p>
+            </label>
 
-            <button
-              type="button"
-              onClick={() => void handleSaveSettings()}
-              disabled={isSavingSettings || !canManageSettings}
-              className="btn-primary mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isSavingSettings ? "Salvando..." : "Salvar dados"}
-            </button>
-          </section>
-        </aside>
-      </div>
+            <label className="block">
+              <span className="mb-2 block text-sm text-zinc-300">Logo da instância</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={handleLogoFileChange}
+                className="field h-11 w-full rounded-xl px-2 text-xs file:mr-2 file:rounded file:border-0 file:bg-[var(--accent)] file:px-2.5 file:py-1.5 file:text-[11px] file:font-semibold file:text-[var(--accent-ink)]"
+                disabled={!canManageSettings || !isBrandingColumnsAvailable || isLoading}
+              />
+              <p className="mt-2 text-xs text-zinc-500">
+                PNG, JPG, WebP ou SVG com tamanho máximo de 2MB.
+              </p>
+            </label>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <p className="text-xs text-zinc-500">Prévia</p>
+            <div className="mt-2 overflow-hidden rounded-xl border border-white/10">
+              <div className="h-2 w-full" style={{ backgroundColor: normalizedAccentColor }} />
+              <div className="flex items-center gap-3 px-3 py-3">
+                <div className="surface-soft flex h-12 w-28 items-center justify-center overflow-hidden rounded-lg px-2">
+                  {siteLogoUrl ? (
+                    <img
+                      src={siteLogoUrl}
+                      alt="Logo personalizada"
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs font-semibold text-zinc-500">Sua logo</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-zinc-100">{organizationName}</p>
+                  <p className="text-xs text-zinc-500">Cor aplicada em botões e destaques.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void handleResetBranding()}
+          disabled={!canManageSettings || isSaving || isLoading || !isBrandingColumnsAvailable}
+          className="btn-muted mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {isSaving ? "Processando..." : "Voltar ao padrão"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleSaveBranding()}
+          disabled={!canManageSettings || isSaving || isLoading || !isBrandingColumnsAvailable}
+          className="btn-primary mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {isSaving ? "Salvando..." : "Salvar personalização"}
+        </button>
+      </section>
     </section>
   );
 }

@@ -78,40 +78,42 @@ export default function LoginPage() {
 
   if (isCheckingSession) {
     return (
-      <div className="relative min-h-screen overflow-hidden text-[var(--foreground)]">
+      <div className="relative min-h-[100dvh] overflow-x-hidden text-[var(--foreground)]">
         <div className="login-bg fixed inset-0 -z-30" />
         <div className="login-fx fixed inset-0 -z-20" />
-        <div className="h-screen p-4 md:p-8">
-          <div className="surface h-full animate-pulse" />
+        <div className="h-[100dvh] p-3 sm:p-4 md:p-8">
+          <div className="surface h-full rounded-2xl animate-pulse" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden text-[var(--foreground)]">
+    <div className="relative min-h-[100dvh] overflow-x-hidden text-[var(--foreground)]">
       <div className="login-bg fixed inset-0 -z-30" />
       <div className="login-fx fixed inset-0 -z-20" />
 
-      <div className="absolute right-4 top-4 z-20">
+      <div className="absolute right-3 top-3 z-20 sm:right-4 sm:top-4">
         <ThemeToggle />
       </div>
 
-      <main className="grid min-h-screen lg:grid-cols-[1.35fr_0.65fr]">
-        <section className="flex items-center justify-center border-b border-[var(--border)] px-5 py-12 md:px-10 lg:border-b-0 lg:border-r lg:px-14">
-          <div className="h-28 w-[460px] max-w-full overflow-hidden md:h-36 md:w-[620px] lg:h-44 lg:w-[760px]">
+      <main className="grid min-h-[100dvh] lg:grid-cols-[1.35fr_0.65fr]">
+        <section className="flex items-center justify-center border-b border-[var(--border)] px-4 pb-8 pt-16 sm:px-8 sm:py-10 md:px-10 lg:border-b-0 lg:border-r lg:px-14 lg:py-12">
+          <div className="h-20 w-full max-w-[360px] overflow-hidden sm:h-24 sm:max-w-[460px] md:h-32 md:max-w-[620px] lg:h-44 lg:max-w-[760px]">
             <img src="/manager.svg" alt="Shad Manager" className="h-full w-full object-cover object-left" />
           </div>
         </section>
 
-        <section className="flex items-center justify-center px-4 py-8 md:px-8">
-          <div className="surface w-full max-w-md p-6 md:p-8">
+        <section className="flex items-start justify-center px-4 pb-8 pt-2 sm:px-8 sm:pb-10 sm:pt-4 lg:items-center lg:py-8">
+          <div className="surface w-full max-w-md p-5 sm:p-6 md:p-8">
             <div className="text-left">
               <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted-soft)]">Acesso</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--foreground-strong)]">Entrar no painel</h2>
+              <h2 className="mt-2 text-xl font-semibold text-[var(--foreground-strong)] sm:text-2xl">
+                Entrar no painel
+              </h2>
             </div>
 
-            <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
+            <form className="mt-6 space-y-4 sm:mt-7" onSubmit={handleSubmit}>
               <label className="block space-y-2 text-left">
                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted-soft)]">
                   Email

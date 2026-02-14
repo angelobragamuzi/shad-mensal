@@ -1,9 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, LayoutDashboard, LogOut, Menu, UsersRound, X } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  QrCode,
+  UsersRound,
+  X,
+} from "lucide-react";
+import {
+  BRANDING_CHANGE_EVENT,
+  type BrandingChangeDetail,
+  buildBrandCssVariables,
+  DEFAULT_SITE_ACCENT_COLOR,
+  normalizeHexColor,
+} from "@/lib/shad-manager/branding";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { getUserOrgContext } from "@/lib/supabase/auth-org";
@@ -18,10 +42,17 @@ type MenuItem = {
   icon: ComponentType<{ size?: number }>;
 };
 
+interface SiteBrandingRow {
+  site_logo_url: string | null;
+  site_accent_color: string | null;
+}
+
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/clientes", icon: UsersRound },
-  { label: "Calendario", href: "/calendario", icon: CalendarDays },
+  { label: "Calendário", href: "/calendario", icon: CalendarDays },
+  { label: "Organização", href: "/organizacao", icon: Building2 },
+  { label: "Cobranças", href: "/cobrancas", icon: QrCode },
 ];
 
 export function AppShell({ children }: AppShellProps) {
@@ -31,7 +62,44 @@ export function AppShell({ children }: AppShellProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [userRole, setUserRole] = useState<"owner" | "admin" | "staff" | null>(null);
+  const [brandLogoUrl, setBrandLogoUrl] = useState("");
+  const [brandAccentColor, setBrandAccentColor] = useState(DEFAULT_SITE_ACCENT_COLOR);
+  const [isBrandingSupported, setIsBrandingSupported] = useState(true);
+  const [logoLoadError, setLogoLoadError] = useState(false);
+
+  const loadSiteBranding = useCallback(
+    async (organizationId: string, supabase = getSupabaseBrowserClient()) => {
+      const { data, error } = await supabase
+        .from("organization_settings")
+        .select("site_logo_url, site_accent_color")
+        .eq("organization_id", organizationId)
+        .maybeSingle();
+
+      if (error) {
+        const normalizedMessage = error.message.toLowerCase();
+        const missingLogoColumn =
+          normalizedMessage.includes("site_logo_url") && normalizedMessage.includes("does not exist");
+        const missingAccentColumn =
+          normalizedMessage.includes("site_accent_color") &&
+          normalizedMessage.includes("does not exist");
+
+        if (missingLogoColumn || missingAccentColumn) {
+          setIsBrandingSupported(false);
+          setBrandLogoUrl("");
+          setBrandAccentColor(DEFAULT_SITE_ACCENT_COLOR);
+          return;
+        }
+
+        throw new Error(error.message);
+      }
+
+      const branding = data as SiteBrandingRow | null;
+      setIsBrandingSupported(true);
+      setBrandLogoUrl(branding?.site_logo_url?.trim() ?? "");
+      setBrandAccentColor(normalizeHexColor(branding?.site_accent_color));
+    },
+    []
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -59,7 +127,15 @@ export function AppShell({ children }: AppShellProps) {
         }
 
         if (!ignore && orgContext) {
-          setUserRole(orgContext.role);
+          try {
+            await loadSiteBranding(orgContext.organizationId, supabase);
+          } catch {
+            if (!ignore) {
+              setIsBrandingSupported(false);
+              setBrandLogoUrl("");
+              setBrandAccentColor(DEFAULT_SITE_ACCENT_COLOR);
+            }
+          }
         }
       } finally {
         if (!ignore) {
@@ -83,18 +159,43 @@ export function AppShell({ children }: AppShellProps) {
         router.replace("/onboarding");
         return;
       }
-      setUserRole(orgContext.role);
+      try {
+        await loadSiteBranding(orgContext.organizationId, supabase);
+      } catch {
+        setIsBrandingSupported(false);
+        setBrandLogoUrl("");
+        setBrandAccentColor(DEFAULT_SITE_ACCENT_COLOR);
+      }
     });
 
     return () => {
       ignore = true;
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [loadSiteBranding, router]);
 
   useEffect(() => {
     setIsMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    setLogoLoadError(false);
+  }, [brandLogoUrl]);
+
+  useEffect(() => {
+    const onBrandingChange = (event: Event) => {
+      const detail = (event as CustomEvent<BrandingChangeDetail>).detail;
+      if (!detail) return;
+      setIsBrandingSupported(true);
+      setBrandLogoUrl(detail.logoUrl?.trim() ?? "");
+      setBrandAccentColor(normalizeHexColor(detail.accentColor));
+    };
+
+    window.addEventListener(BRANDING_CHANGE_EVENT, onBrandingChange);
+    return () => {
+      window.removeEventListener(BRANDING_CHANGE_EVENT, onBrandingChange);
+    };
+  }, []);
 
   const userName = useMemo(() => {
     if (!userEmail) return "Conta";
@@ -105,6 +206,17 @@ export function AppShell({ children }: AppShellProps) {
     () => menuItems.find((item) => pathname === item.href)?.label ?? "Painel",
     [pathname]
   );
+
+  const shellStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!isBrandingSupported) return undefined;
+    return buildBrandCssVariables(brandAccentColor) as CSSProperties;
+  }, [brandAccentColor, isBrandingSupported]);
+
+  const resolvedLogoSrc = useMemo(
+    () => (!logoLoadError && brandLogoUrl ? brandLogoUrl : "/manager.svg"),
+    [brandLogoUrl, logoLoadError]
+  );
+  const isDefaultLogo = resolvedLogoSrc === "/manager.svg";
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -129,13 +241,28 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="relative min-h-screen text-[var(--foreground)]">
+    <div className="relative min-h-screen text-[var(--foreground)]" style={shellStyle}>
       <div className="app-bg fixed inset-0 -z-20" />
 
       <aside className="surface fixed inset-y-0 left-0 z-40 hidden w-64 border-r md:flex md:flex-col md:rounded-none md:border-l-0 md:border-t-0 md:border-b-0 md:shadow-none">
         <div className="border-b border-[var(--border)] px-6 py-5">
-          <div className="h-12 w-[200px] overflow-hidden">
-            <img src="/manager.svg" alt="Shad Manager" className="h-full w-full object-cover object-left" />
+          <div
+            className={
+              isDefaultLogo
+                ? "h-12 w-[200px] overflow-hidden"
+                : "flex min-h-[56px] w-full items-center justify-center"
+            }
+          >
+            <img
+              src={resolvedLogoSrc}
+              alt="Shad Manager"
+              className={
+                isDefaultLogo
+                  ? "h-full w-full object-cover object-left"
+                  : "max-h-[56px] w-full max-w-[200px] object-contain object-center"
+              }
+              onError={() => setLogoLoadError(true)}
+            />
           </div>
           <h1 className="sr-only">Shad Manager</h1>
         </div>
@@ -165,7 +292,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="border-t border-[var(--border)] px-4 py-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted-soft)]">Usuario</p>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted-soft)]">Usuário</p>
               <p className="truncate text-sm font-medium text-[var(--foreground)]">{userName}</p>
             </div>
             <ThemeToggle compact />
@@ -185,8 +312,23 @@ export function AppShell({ children }: AppShellProps) {
 
       <div className="md:pl-64">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-3 backdrop-blur md:hidden">
-          <div className="h-10 w-[165px] overflow-hidden">
-            <img src="/manager.svg" alt="Shad Manager" className="h-full w-full object-cover object-left" />
+          <div
+            className={
+              isDefaultLogo
+                ? "h-10 w-[165px] overflow-hidden"
+                : "flex h-10 w-full max-w-[165px] items-center justify-center"
+            }
+          >
+            <img
+              src={resolvedLogoSrc}
+              alt="Shad Manager"
+              className={
+                isDefaultLogo
+                  ? "h-full w-full object-cover object-left"
+                  : "max-h-10 w-full object-contain object-center"
+              }
+              onError={() => setLogoLoadError(true)}
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -251,3 +393,4 @@ export function AppShell({ children }: AppShellProps) {
     </div>
   );
 }
+
