@@ -31,13 +31,13 @@ export interface PaymentRow {
   paid_at: string;
 }
 
-export function centsToCurrency(valueCents: number) {
+export function centsToCurrency(valueCents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
     valueCents / 100
   );
 }
 
-export function mapBillingCycleLabel(cycle: BillingCycle) {
+export function mapBillingCycleLabel(cycle: BillingCycle): string {
   if (cycle === "weekly") return "Semanal";
   if (cycle === "quarterly") return "Trimestral";
   return "Mensal";
@@ -63,7 +63,9 @@ export function mapStatusLabel(invoice: InvoiceRow | null): UiStudentStatus {
   return "Próximo do vencimento";
 }
 
-export function buildCurrentPeriodDates(dueDay: number) {
+export function buildCurrentPeriodDates(
+  dueDay: number
+): { start: string; end: string; dueDate: string } {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -81,7 +83,7 @@ export function buildCurrentPeriodDates(dueDay: number) {
   };
 }
 
-export function daysLate(isoDate: string) {
+export function daysLate(isoDate: string): number {
   const due = new Date(`${isoDate}T00:00:00`);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -89,13 +91,13 @@ export function daysLate(isoDate: string) {
   return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }
 
-export function formatShortDate(isoDate: string) {
+export function formatShortDate(isoDate: string): string {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(
     new Date(`${isoDate}T00:00:00`)
   );
 }
 
-export function formatHour(isoDate: string) {
+export function formatHour(isoDate: string): string {
   return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(
     new Date(isoDate)
   );
