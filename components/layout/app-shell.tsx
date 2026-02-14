@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useCallback,
@@ -12,12 +12,15 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Building2,
   CalendarDays,
+  FileText,
+  HandCoins,
   LayoutDashboard,
+  ListTodo,
   LogOut,
   Menu,
   QrCode,
+  Settings,
   UsersRound,
   X,
 } from "lucide-react";
@@ -47,12 +50,34 @@ interface SiteBrandingRow {
   site_accent_color: string | null;
 }
 
+const AUTH_CHECK_TIMEOUT_MS = 2_500;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/clientes", icon: UsersRound },
   { label: "Calendário", href: "/calendario", icon: CalendarDays },
-  { label: "Organização", href: "/organizacao", icon: Building2 },
   { label: "Cobranças", href: "/cobrancas", icon: QrCode },
+  { label: "Baixas", href: "/baixas", icon: HandCoins },
+  { label: "Relatórios", href: "/relatorios", icon: FileText },
+  { label: "Tarefas", href: "/tarefas", icon: ListTodo },
 ];
 
 export function AppShell({ children }: AppShellProps) {
@@ -66,6 +91,7 @@ export function AppShell({ children }: AppShellProps) {
   const [brandAccentColor, setBrandAccentColor] = useState(DEFAULT_SITE_ACCENT_COLOR);
   const [isBrandingSupported, setIsBrandingSupported] = useState(true);
   const [logoLoadError, setLogoLoadError] = useState(false);
+  const [authCheckWarning, setAuthCheckWarning] = useState<string | null>(null);
 
   const loadSiteBranding = useCallback(
     async (organizationId: string, supabase = getSupabaseBrowserClient()) => {
@@ -104,12 +130,17 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     let ignore = false;
     const supabase = getSupabaseBrowserClient();
+    setAuthCheckWarning(null);
 
     const validateSession = async () => {
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_CHECK_TIMEOUT_MS,
+          "Validação de sessão demorou demais. Tente recarregar."
+        );
 
         if (!ignore && !session) {
           router.replace("/login");
@@ -120,22 +151,33 @@ export function AppShell({ children }: AppShellProps) {
           setUserEmail(session.user.email);
         }
 
-        const { data: orgContext, error: orgError } = await getUserOrgContext(supabase);
+        const { data: orgContext, error: orgError } = await withTimeout(
+          getUserOrgContext(supabase, { session }),
+          AUTH_CHECK_TIMEOUT_MS,
+          "Validação da organização demorou demais. Tente recarregar."
+        );
         if (!ignore && (orgError || !orgContext)) {
           router.replace("/onboarding");
           return;
         }
 
         if (!ignore && orgContext) {
-          try {
-            await loadSiteBranding(orgContext.organizationId, supabase);
-          } catch {
+          setAuthCheckWarning(null);
+          void loadSiteBranding(orgContext.organizationId, supabase).catch(() => {
             if (!ignore) {
               setIsBrandingSupported(false);
               setBrandLogoUrl("");
               setBrandAccentColor(DEFAULT_SITE_ACCENT_COLOR);
             }
-          }
+          });
+        }
+      } catch (error) {
+        if (!ignore) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Falha ao validar sessão. Recarregue a página.";
+          setAuthCheckWarning(message);
         }
       } finally {
         if (!ignore) {
@@ -148,24 +190,32 @@ export function AppShell({ children }: AppShellProps) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         router.replace("/login");
         return;
       }
       setUserEmail(session.user.email ?? "");
-      const { data: orgContext } = await getUserOrgContext(supabase);
-      if (!orgContext) {
-        router.replace("/onboarding");
-        return;
-      }
-      try {
-        await loadSiteBranding(orgContext.organizationId, supabase);
-      } catch {
-        setIsBrandingSupported(false);
-        setBrandLogoUrl("");
-        setBrandAccentColor(DEFAULT_SITE_ACCENT_COLOR);
-      }
+      void (async () => {
+        try {
+          const { data: orgContext } = await withTimeout(
+            getUserOrgContext(supabase, { session }),
+            AUTH_CHECK_TIMEOUT_MS,
+            "Validação da organização demorou demais."
+          );
+          if (!orgContext) {
+            router.replace("/onboarding");
+            return;
+          }
+
+          setAuthCheckWarning(null);
+          await loadSiteBranding(orgContext.organizationId, supabase);
+        } catch {
+          setIsBrandingSupported(false);
+          setBrandLogoUrl("");
+          setBrandAccentColor(DEFAULT_SITE_ACCENT_COLOR);
+        }
+      })();
     });
 
     return () => {
@@ -202,10 +252,10 @@ export function AppShell({ children }: AppShellProps) {
     return userEmail.split("@")[0];
   }, [userEmail]);
 
-  const currentSection = useMemo(
-    () => menuItems.find((item) => pathname === item.href)?.label ?? "Painel",
-    [pathname]
-  );
+  const currentSection = useMemo(() => {
+    if (pathname === "/organizacao") return "Configurações";
+    return menuItems.find((item) => pathname === item.href)?.label ?? "Painel";
+  }, [pathname]);
 
   const shellStyle = useMemo<CSSProperties | undefined>(() => {
     if (!isBrandingSupported) return undefined;
@@ -243,6 +293,11 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="relative min-h-screen text-[var(--foreground)]" style={shellStyle}>
       <div className="app-bg fixed inset-0 -z-20" />
+      {authCheckWarning ? (
+        <div className="fixed left-3 right-3 top-3 z-50 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 md:left-auto md:right-8 md:top-5 md:max-w-sm">
+          {authCheckWarning}
+        </div>
+      ) : null}
 
       <aside className="surface fixed inset-y-0 left-0 z-40 hidden w-64 border-r md:flex md:flex-col md:rounded-none md:border-l-0 md:border-t-0 md:border-b-0 md:shadow-none">
         <div className="border-b border-[var(--border)] px-6 py-5">
@@ -295,7 +350,16 @@ export function AppShell({ children }: AppShellProps) {
               <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted-soft)]">Usuário</p>
               <p className="truncate text-sm font-medium text-[var(--foreground)]">{userName}</p>
             </div>
-            <ThemeToggle compact />
+            <div className="flex items-center gap-2">
+              <Link
+                href="/organizacao"
+                className="btn-muted inline-flex h-8 w-8 items-center justify-center rounded-md"
+                aria-label="Configurações"
+              >
+                <Settings size={14} />
+              </Link>
+              <ThemeToggle compact />
+            </div>
           </div>
 
           <button
@@ -365,6 +429,18 @@ export function AppShell({ children }: AppShellProps) {
                 </Link>
               );
             })}
+            <Link
+              href="/organizacao"
+              className={[
+                "inline-flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm transition",
+                pathname === "/organizacao"
+                  ? "border-[var(--accent)] bg-[var(--card-soft)] text-[var(--foreground)]"
+                  : "border-transparent text-[var(--muted)] hover:border-[var(--border)] hover:bg-[var(--card-soft)] hover:text-[var(--foreground)]",
+              ].join(" ")}
+            >
+              <Settings size={16} />
+              Configurações
+            </Link>
             <button
               type="button"
               onClick={handleLogout}

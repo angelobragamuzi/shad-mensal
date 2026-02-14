@@ -1,6 +1,6 @@
 "use client";
 
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 
 interface UserOrgContext {
   user: User;
@@ -19,15 +19,19 @@ let cachedContext: CachedContext | null = null;
 
 export async function getUserOrgContext(
   supabase: SupabaseClient,
-  options?: { force?: boolean }
+  options?: { force?: boolean; session?: Session | null }
 ): Promise<{ data: UserOrgContext | null; error: string | null }> {
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  let session = options?.session ?? null;
+  if (!session) {
+    const {
+      data: { session: fetchedSession },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-  if (sessionError) {
-    return { data: null, error: sessionError.message };
+    if (sessionError) {
+      return { data: null, error: sessionError.message };
+    }
+    session = fetchedSession;
   }
 
   if (!session?.user) {

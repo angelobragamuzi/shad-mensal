@@ -41,7 +41,7 @@ export default function OnboardingPage() {
         }
 
         if (!ignore && session) {
-          const { data: orgContext } = await getUserOrgContext(supabase);
+          const { data: orgContext } = await getUserOrgContext(supabase, { session });
           if (orgContext) {
             router.replace("/dashboard");
             return;

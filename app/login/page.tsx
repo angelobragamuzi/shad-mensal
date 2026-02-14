@@ -26,7 +26,7 @@ export default function LoginPage() {
 
         if (!ignore && session) {
           const supabase = getSupabaseBrowserClient();
-          const { data: orgContext } = await getUserOrgContext(supabase);
+          const { data: orgContext } = await getUserOrgContext(supabase, { session });
           router.replace(orgContext ? "/dashboard" : "/onboarding");
           return;
         }
@@ -56,7 +56,7 @@ export default function LoginPage() {
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
@@ -66,7 +66,10 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: orgContext } = await getUserOrgContext(supabase);
+      const { data: orgContext } = await getUserOrgContext(supabase, {
+        session: signInData.session,
+        force: true,
+      });
       router.replace(orgContext ? "/dashboard" : "/onboarding");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha inesperada ao autenticar.";
