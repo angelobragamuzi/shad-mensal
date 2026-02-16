@@ -143,7 +143,7 @@ begin
     where organization_id = p_org_id
       and role = 'owner';
 
-    if v_owner_count <= 1 theneeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+    if v_owner_count <= 1 then
       raise exception 'cannot remove last owner' using errcode = 'P0001';
     end if;
   end if;

@@ -1,6 +1,6 @@
 -- Seed demo: cria 20 clientes com dados ficticios.
 -- Execute no SQL Editor do Supabase.
--- Opcional: defina v_org_slug se quiser forcar uma organizacao especifica.
+-- Opcional: defina v_org_slug, v_user_email ou v_user_id antes de rodar.
 
 do $$
 declare
@@ -11,26 +11,29 @@ declare
   v_created_by uuid;
   v_seed integer := (extract(epoch from clock_timestamp())::integer % 100000);
 
-  v_names text[] := array[
-    'Ana Luiza', 'Bruno Henrique', 'Carla Mendes', 'Diego Souza', 'Eduarda Lima',
-    'Fabio Martins', 'Gabriela Rocha', 'Hugo Almeida', 'Isabela Nunes', 'Joao Pedro',
-    'Karen Silva', 'Lucas Ferreira', 'Mariana Costa', 'Nicolas Ribeiro', 'Olivia Santos',
-    'Paulo Vitor', 'Renata Cardoso', 'Samuel Araujo', 'Tainara Gomes', 'Vinicius Barreto'
+  v_first_names text[] := array[
+    'Ana', 'Bruno', 'Carla', 'Diego', 'Eduarda',
+    'Fabio', 'Gabriela', 'Hugo', 'Isabela', 'Joao',
+    'Karen', 'Lucas', 'Mariana', 'Nicolas', 'Olivia',
+    'Paulo', 'Renata', 'Samuel', 'Tainara', 'Vinicius'
+  ];
+
+  v_last_names text[] := array[
+    'Silva', 'Souza', 'Costa', 'Oliveira', 'Pereira',
+    'Rodrigues', 'Almeida', 'Nascimento', 'Lima', 'Araujo',
+    'Ferreira', 'Martins', 'Gomes', 'Ribeiro', 'Barreto'
   ];
 
   i integer;
-  v_student_id uuid;
-  v_due_day smallint;
-  v_amount_cents integer;
-  v_student_status public.student_status;
-  v_cycle public.billing_cycle;
-  v_due_date date;
+  v_full_name text;
   v_phone text;
+  v_email text;
   v_postal text;
   v_number text;
-  v_invoice_id uuid;
-  v_invoice_status public.invoice_status;
-  v_paid_cents integer;
+  v_cycle public.billing_cycle;
+  v_amount_cents integer;
+  v_due_day smallint;
+  v_status public.student_status;
 begin
   if v_org_slug is not null then
     select o.id
@@ -78,33 +81,43 @@ begin
   end if;
 
   for i in 1..20 loop
-    v_due_day := (((i * 5) + v_seed) % 28 + 1)::smallint;
-    v_amount_cents := 8900 + (((i * 131) + v_seed) % 32000); -- R$ 89,00 a ~R$ 409,00
-
-    v_student_status := case
-      when i % 10 = 0 then 'inactive'::public.student_status
-      else 'active'::public.student_status
-    end;
-
-    v_cycle := case
-      when i % 3 = 0 then 'quarterly'::public.billing_cycle
-      when i % 2 = 0 then 'weekly'::public.billing_cycle
-      else 'monthly'::public.billing_cycle
-    end;
+    v_full_name :=
+      v_first_names[(i % array_length(v_first_names, 1)) + 1]
+      || ' '
+      || v_last_names[((i * 3) % array_length(v_last_names, 1)) + 1];
 
     v_phone :=
       lpad((11 + ((i + v_seed) % 70))::text, 2, '0')
       || '9'
       || lpad((((v_seed * 10) + i) % 100000000)::text, 8, '0');
 
+    v_email :=
+      lower(replace(v_full_name, ' ', '.'))
+      || lpad((v_seed % 99)::text, 2, '0')
+      || lpad(i::text, 2, '0')
+      || '@demo.local';
+
     v_postal := lpad((10000 + ((i * 73 + v_seed) % 89999))::text, 5, '0')
       || lpad((((i * 91) + v_seed) % 999)::text, 3, '0');
     v_number := (10 + (i * 7))::text;
+
+    v_due_day := (((i * 5) + v_seed) % 28 + 1)::smallint;
+    v_amount_cents := 8900 + (((i * 131) + v_seed) % 32000); -- R$ 89,00 a ~R$ 409,00
+    v_cycle := case
+      when i % 3 = 0 then 'quarterly'::public.billing_cycle
+      when i % 2 = 0 then 'weekly'::public.billing_cycle
+      else 'monthly'::public.billing_cycle
+    end;
+    v_status := case
+      when i % 10 = 0 then 'inactive'::public.student_status
+      else 'active'::public.student_status
+    end;
 
     insert into public.students (
       organization_id,
       full_name,
       phone,
+      email,
       postal_code,
       address_number,
       billing_cycle,
@@ -116,56 +129,18 @@ begin
     )
     values (
       v_org_id,
-      v_names[i],
+      v_full_name,
       v_phone,
+      v_email,
       v_postal,
       v_number,
       v_cycle,
       v_amount_cents,
       v_due_day,
-      v_student_status,
+      v_status,
       format('Seed automatico (%s)', v_seed),
       v_created_by
-    )
-    returning id into v_student_id;
-
-    v_due_date := (date_trunc('month', current_date)::date + (v_due_day - 1));
-    v_invoice_status := case
-      when i % 5 = 0 then 'overdue'::public.invoice_status
-      when i % 4 = 0 then 'partial'::public.invoice_status
-      when i % 3 = 0 then 'paid'::public.invoice_status
-      else 'pending'::public.invoice_status
-    end;
-
-    v_paid_cents := case v_invoice_status
-      when 'paid'::public.invoice_status then v_amount_cents
-      when 'partial'::public.invoice_status then greatest((v_amount_cents * 0.4)::int, 1000)
-      else 0
-    end;
-
-    insert into public.invoices (
-      organization_id,
-      student_id,
-      reference_period_start,
-      reference_period_end,
-      due_date,
-      amount_cents,
-      paid_amount_cents,
-      status,
-      created_by
-    )
-    values (
-      v_org_id,
-      v_student_id,
-      date_trunc('month', current_date)::date,
-      (date_trunc('month', current_date)::date + interval '1 month - 1 day')::date,
-      v_due_date,
-      v_amount_cents,
-      v_paid_cents,
-      v_invoice_status,
-      v_created_by
-    )
-    returning id into v_invoice_id;
+    );
   end loop;
 end;
 $$;

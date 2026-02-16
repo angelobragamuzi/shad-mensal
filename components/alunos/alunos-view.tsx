@@ -39,6 +39,7 @@ interface UiAluno {
   id: string;
   nome: string;
   telefone: string;
+  email: string;
   cep: string;
   numeroResidencia: string;
   modalidade: Modalidade;
@@ -51,6 +52,7 @@ interface UiAluno {
 interface AlunoForm {
   nome: string;
   telefone: string;
+  email: string;
   cep: string;
   numeroResidencia: string;
   modalidade: Modalidade;
@@ -111,6 +113,7 @@ function createInitialForm(): AlunoForm {
   return {
     nome: "",
     telefone: "",
+    email: "",
     cep: "",
     numeroResidencia: "",
     modalidade: "Mensal",
@@ -209,7 +212,9 @@ export function AlunosView() {
       const [studentsResponse, invoicesResponse] = await Promise.all([
         supabase
           .from("students")
-          .select("id, full_name, phone, postal_code, address_number, billing_cycle, amount_cents, due_day")
+          .select(
+            "id, full_name, phone, email, postal_code, address_number, billing_cycle, amount_cents, due_day"
+          )
           .eq("organization_id", context.organizationId)
           .order("full_name", { ascending: true }),
         supabase
@@ -239,6 +244,7 @@ export function AlunosView() {
             id: student.id,
             nome: student.full_name,
             telefone: student.phone,
+            email: student.email ?? "",
             cep: student.postal_code ?? "",
             numeroResidencia: student.address_number ?? "",
             modalidade: mapCycleToLabel(student.billing_cycle),
@@ -268,7 +274,8 @@ export function AlunosView() {
       const matchesSearch =
         !term ||
         aluno.nome.toLowerCase().includes(term) ||
-        aluno.telefone.toLowerCase().includes(term);
+        aluno.telefone.toLowerCase().includes(term) ||
+        aluno.email.toLowerCase().includes(term);
 
       const matchesStatus = statusFilter === "Todos" || aluno.status === statusFilter;
       return matchesSearch && matchesStatus;
@@ -333,6 +340,7 @@ export function AlunosView() {
     setForm({
       nome: aluno.nome,
       telefone: formatPhoneNumber(aluno.telefone),
+      email: aluno.email,
       cep: formatCep(aluno.cep),
       numeroResidencia: aluno.numeroResidencia,
       modalidade: aluno.modalidade,
@@ -499,6 +507,12 @@ export function AlunosView() {
       return;
     }
 
+    const trimmedEmail = form.email.trim();
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setErrorMessage("E-mail inválido.");
+      return;
+    }
+
     const cepDigits = normalizeCep(form.cep);
     const addressNumber = form.numeroResidencia.trim();
 
@@ -532,6 +546,7 @@ export function AlunosView() {
             organization_id: organizationId,
             full_name: form.nome.trim(),
             phone: form.telefone.trim(),
+            email: trimmedEmail || null,
             postal_code: cepDigits || null,
             address_number: addressNumber || null,
             billing_cycle: mapLabelToCycle(form.modalidade),
@@ -564,6 +579,7 @@ export function AlunosView() {
           .update({
             full_name: form.nome.trim(),
             phone: form.telefone.trim(),
+            email: trimmedEmail || null,
             postal_code: cepDigits || null,
             address_number: addressNumber || null,
             billing_cycle: mapLabelToCycle(form.modalidade),
@@ -706,7 +722,7 @@ export function AlunosView() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar por nome ou telefone"
+                placeholder="Buscar por nome, telefone ou e-mail"
                 className="field glow-focus h-11 w-full rounded-md pl-9 pr-4 text-sm outline-none"
               />
             </div>
@@ -1021,6 +1037,17 @@ export function AlunosView() {
                   maxLength={15}
                   className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
                   placeholder="(11) 90000-0000"
+                />
+              </label>
+
+              <label className="sm:col-span-2">
+                <span className="mb-2 block text-sm text-zinc-300">E-mail</span>
+                <input
+                  value={form.email}
+                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                  type="email"
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
+                  placeholder="cliente@email.com"
                 />
               </label>
 

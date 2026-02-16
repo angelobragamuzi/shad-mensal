@@ -151,6 +151,7 @@ export function OrganizacaoView() {
       const branding = settingsResponse.data as BrandingSettingsRow | null;
       setSiteLogoUrl(branding?.site_logo_url?.trim() ?? "");
       setSiteAccentColor(normalizeHexColor(branding?.site_accent_color));
+
     } catch (error) {
       const message =
         error instanceof Error
