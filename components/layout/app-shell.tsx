@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   ListTodo,
   LogOut,
+  MapPin,
   Menu,
   QrCode,
   Settings,
@@ -73,6 +74,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/clientes", icon: UsersRound },
+  { label: "Localizar", href: "/localizar", icon: MapPin },
   { label: "Calendário", href: "/calendario", icon: CalendarDays },
   { label: "Cobranças", href: "/cobrancas", icon: QrCode },
   { label: "Baixas", href: "/baixas", icon: HandCoins },
@@ -469,4 +471,3 @@ export function AppShell({ children }: AppShellProps) {
     </div>
   );
 }
-

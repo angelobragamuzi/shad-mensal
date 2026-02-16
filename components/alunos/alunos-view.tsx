@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -38,6 +39,8 @@ interface UiAluno {
   id: string;
   nome: string;
   telefone: string;
+  cep: string;
+  numeroResidencia: string;
   modalidade: Modalidade;
   valorCents: number;
   vencimento: number;
@@ -48,6 +51,8 @@ interface UiAluno {
 interface AlunoForm {
   nome: string;
   telefone: string;
+  cep: string;
+  numeroResidencia: string;
   modalidade: Modalidade;
   valor: string;
   vencimentoDia: string;
@@ -106,6 +111,8 @@ function createInitialForm(): AlunoForm {
   return {
     nome: "",
     telefone: "",
+    cep: "",
+    numeroResidencia: "",
     modalidade: "Mensal",
     valor: "",
     vencimentoDia: String(now.getDate()),
@@ -155,6 +162,17 @@ function formatPhoneNumber(value: string) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+function normalizeCep(value: string) {
+  return value.replace(/\D/g, "").slice(0, 8);
+}
+
+function formatCep(value: string) {
+  const digits = normalizeCep(value);
+  if (!digits) return "";
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
 export function AlunosView() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -172,6 +190,7 @@ export function AlunosView() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [alunoToDelete, setAlunoToDelete] = useState<UiAluno | null>(null);
   const [form, setForm] = useState<AlunoForm>(createInitialForm);
+  const modalRoot = typeof document === "undefined" ? null : document.body;
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
@@ -190,7 +209,7 @@ export function AlunosView() {
       const [studentsResponse, invoicesResponse] = await Promise.all([
         supabase
           .from("students")
-          .select("id, full_name, phone, billing_cycle, amount_cents, due_day")
+          .select("id, full_name, phone, postal_code, address_number, billing_cycle, amount_cents, due_day")
           .eq("organization_id", context.organizationId)
           .order("full_name", { ascending: true }),
         supabase
@@ -220,6 +239,8 @@ export function AlunosView() {
             id: student.id,
             nome: student.full_name,
             telefone: student.phone,
+            cep: student.postal_code ?? "",
+            numeroResidencia: student.address_number ?? "",
             modalidade: mapCycleToLabel(student.billing_cycle),
             valorCents: student.amount_cents,
             vencimento: student.due_day,
@@ -312,6 +333,8 @@ export function AlunosView() {
     setForm({
       nome: aluno.nome,
       telefone: formatPhoneNumber(aluno.telefone),
+      cep: formatCep(aluno.cep),
+      numeroResidencia: aluno.numeroResidencia,
       modalidade: aluno.modalidade,
       valor: (aluno.valorCents / 100).toFixed(2),
       vencimentoDia: buildDayFromAluno(aluno),
@@ -476,6 +499,19 @@ export function AlunosView() {
       return;
     }
 
+    const cepDigits = normalizeCep(form.cep);
+    const addressNumber = form.numeroResidencia.trim();
+
+    if (cepDigits && cepDigits.length !== 8) {
+      setErrorMessage("CEP inválido.");
+      return;
+    }
+
+    if ((cepDigits && !addressNumber) || (!cepDigits && addressNumber)) {
+      setErrorMessage("Informe CEP e número da residência.");
+      return;
+    }
+
     const amountCents = Math.round(parsedValue * 100);
     if (amountCents <= 0) {
       setErrorMessage("Valor inválido.");
@@ -496,6 +532,8 @@ export function AlunosView() {
             organization_id: organizationId,
             full_name: form.nome.trim(),
             phone: form.telefone.trim(),
+            postal_code: cepDigits || null,
+            address_number: addressNumber || null,
             billing_cycle: mapLabelToCycle(form.modalidade),
             amount_cents: amountCents,
             due_day: dueData.dueDay,
@@ -526,6 +564,8 @@ export function AlunosView() {
           .update({
             full_name: form.nome.trim(),
             phone: form.telefone.trim(),
+            postal_code: cepDigits || null,
+            address_number: addressNumber || null,
             billing_cycle: mapLabelToCycle(form.modalidade),
             amount_cents: amountCents,
             due_day: dueData.dueDay,
@@ -931,9 +971,10 @@ export function AlunosView() {
         </aside>
       </div>
 
-      {showModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="surface animate-scale-in w-full max-w-xl rounded-md p-6">
+      {showModal && modalRoot
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/55 p-4 py-10">
+              <div className="surface animate-scale-in w-full max-w-xl rounded-md p-6">
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-zinc-100">
@@ -980,6 +1021,38 @@ export function AlunosView() {
                   maxLength={15}
                   className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
                   placeholder="(11) 90000-0000"
+                />
+              </label>
+
+              <label>
+                <span className="mb-2 block text-sm text-zinc-300">CEP</span>
+                <input
+                  value={form.cep}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      cep: formatCep(event.target.value),
+                    }))
+                  }
+                  inputMode="numeric"
+                  maxLength={9}
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
+                  placeholder="00000-000"
+                />
+              </label>
+
+              <label>
+                <span className="mb-2 block text-sm text-zinc-300">Número</span>
+                <input
+                  value={form.numeroResidencia}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      numeroResidencia: event.target.value,
+                    }))
+                  }
+                  className="field glow-focus h-11 w-full rounded-md px-3 text-sm outline-none"
+                  placeholder="Ex.: 123"
                 />
               </label>
 
@@ -1045,13 +1118,16 @@ export function AlunosView() {
                 {isSaving ? "Salvando..." : modalMode === "create" ? "Salvar" : "Salvar alterações"}
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            modalRoot
+          )
+        : null}
 
-      {showDeleteModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="surface animate-scale-in w-full max-w-md rounded-md p-6">
+      {showDeleteModal && modalRoot
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/55 p-4 py-10">
+              <div className="surface animate-scale-in w-full max-w-md rounded-md p-6">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-zinc-100">Excluir cliente</h3>
@@ -1094,12 +1170,11 @@ export function AlunosView() {
                 {isDeleteConfirming ? "Excluindo..." : "Excluir"}
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            modalRoot
+          )
+        : null}
     </section>
   );
 }
-
-
-

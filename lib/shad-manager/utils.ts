@@ -8,6 +8,8 @@ export interface StudentRow {
   id: string;
   full_name: string;
   phone: string;
+  postal_code: string | null;
+  address_number: string | null;
   billing_cycle: BillingCycle;
   amount_cents: number;
   due_day: number;

@@ -1,19 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f2f2f2;
-  --foreground: #161616;
-  --foreground-strong: #0d0d0d;
-  --muted: #616161;
-  --muted-soft: #7a7a7a;
-  --border: #d8d8d8;
+  --background: #f6f4ef;
+  --foreground: #1c1b19;
+  --foreground-strong: #110f0d;
+  --muted: #4f4a45;
+  --muted-soft: #6f6a64;
+  --border: #e3dfd6;
   --card: #ffffff;
-  --card-soft: #ececec;
+  --card-soft: #f1ede6;
   --accent: #f07f1d;
   --accent-hover: #df6e0d;
   --accent-ink: #140d06;
   --focus: rgba(240, 127, 29, 0.38);
-  --shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+  --shadow: 0 10px 26px rgba(24, 18, 12, 0.08);
+  --success-text: #0b5f57;
+  --success-border: rgba(11, 95, 87, 0.46);
+  --success-bg-soft: rgba(11, 95, 87, 0.16);
+  --success-bg: rgba(11, 95, 87, 0.24);
+  --success-bg-strong: rgba(11, 95, 87, 0.34);
+  --success-solid: #0f9b8f;
+  --warning-text: #92400e;
+  --warning-border: rgba(146, 64, 14, 0.46);
+  --warning-bg-soft: rgba(146, 64, 14, 0.16);
+  --warning-bg: rgba(146, 64, 14, 0.24);
+  --warning-bg-strong: rgba(146, 64, 14, 0.34);
+  --warning-solid: #f59e0b;
+  --danger-text: #991b1b;
+  --danger-border: rgba(153, 27, 27, 0.46);
+  --danger-bg-soft: rgba(153, 27, 27, 0.16);
+  --danger-bg: rgba(153, 27, 27, 0.24);
+  --danger-bg-strong: rgba(153, 27, 27, 0.34);
+  --danger-solid: #e11d48;
   color-scheme: light;
 }
 
@@ -68,11 +86,11 @@ body {
 *::-webkit-scrollbar-thumb {
   border-radius: 999px;
   border: 2px solid var(--background);
-  background: #909090;
+  background: #b3ada5;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #7b7b7b;
+  background: #9c968f;
 }
 
 .app-bg::before {
@@ -271,6 +289,89 @@ body {
   color: var(--muted-soft) !important;
 }
 
+[data-theme="light"] .text-emerald-100,
+[data-theme="light"] .text-emerald-200,
+[data-theme="light"] .text-emerald-200\/80,
+[data-theme="light"] .text-emerald-300 {
+  color: var(--success-text) !important;
+}
+
+[data-theme="light"] .text-amber-100,
+[data-theme="light"] .text-amber-200,
+[data-theme="light"] .text-amber-200\/80,
+[data-theme="light"] .text-amber-300 {
+  color: var(--warning-text) !important;
+}
+
+[data-theme="light"] .text-red-100,
+[data-theme="light"] .text-red-200,
+[data-theme="light"] .text-red-200\/70,
+[data-theme="light"] .text-red-200\/80,
+[data-theme="light"] .text-red-300 {
+  color: var(--danger-text) !important;
+}
+
+[data-theme="light"] [class*="border-emerald-"] {
+  border-color: var(--success-border) !important;
+}
+
+[data-theme="light"] [class*="border-amber-"] {
+  border-color: var(--warning-border) !important;
+}
+
+[data-theme="light"] [class*="border-red-"] {
+  border-color: var(--danger-border) !important;
+}
+
+[data-theme="light"] .bg-emerald-400\/80 {
+  background-color: var(--success-solid) !important;
+}
+
+[data-theme="light"] .bg-amber-400\/80 {
+  background-color: var(--warning-solid) !important;
+}
+
+[data-theme="light"] .bg-emerald-500\/10,
+[data-theme="light"] .bg-emerald-400\/10 {
+  background-color: var(--success-bg-soft) !important;
+}
+
+[data-theme="light"] .bg-emerald-500\/15,
+[data-theme="light"] .bg-emerald-500\/20 {
+  background-color: var(--success-bg) !important;
+}
+
+[data-theme="light"] .bg-emerald-500\/30 {
+  background-color: var(--success-bg-strong) !important;
+}
+
+[data-theme="light"] .bg-amber-500\/10,
+[data-theme="light"] .bg-amber-500\/15 {
+  background-color: var(--warning-bg-soft) !important;
+}
+
+[data-theme="light"] .bg-amber-500\/20 {
+  background-color: var(--warning-bg) !important;
+}
+
+[data-theme="light"] .bg-amber-500\/30 {
+  background-color: var(--warning-bg-strong) !important;
+}
+
+[data-theme="light"] .bg-red-500\/5,
+[data-theme="light"] .bg-red-500\/10 {
+  background-color: var(--danger-bg-soft) !important;
+}
+
+[data-theme="light"] .bg-red-500\/15,
+[data-theme="light"] .bg-red-500\/20 {
+  background-color: var(--danger-bg) !important;
+}
+
+[data-theme="light"] .bg-red-500\/30 {
+  background-color: var(--danger-bg-strong) !important;
+}
+
 .border-white\/8,
 .border-white\/10,
 .border-white\/20,
@@ -288,6 +389,7 @@ body {
 .bg-zinc-900,
 .bg-zinc-900\/35,
 .bg-zinc-900\/80,
+.bg-zinc-950\/20,
 .bg-zinc-950\/35 {
   background-color: var(--card-soft) !important;
 }
