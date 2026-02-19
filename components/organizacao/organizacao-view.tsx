@@ -416,6 +416,29 @@ export function OrganizacaoView() {
     setSuccessMessage(null);
   };
 
+  const purgeOperationalData = useCallback(
+    async (supabase: ReturnType<typeof getSupabaseBrowserClient>, orgId: string) => {
+      const { error } = await supabase.rpc("purge_organization_operational_data", {
+        p_org_id: orgId,
+      });
+
+      if (!error) return;
+
+      const normalizedMessage = error.message.toLowerCase();
+      if (
+        error.code === "PGRST202" ||
+        normalizedMessage.includes("purge_organization_operational_data")
+      ) {
+        throw new Error(
+          "Função de limpeza não encontrada no banco. Execute a migration `202602190002_shad-manager_purge-operational-data.sql`."
+        );
+      }
+
+      throw new Error(error.message);
+    },
+    []
+  );
+
   const handleImportBackup = async () => {
     if (!organizationId) {
       setErrorMessage("Organização não encontrada.");
@@ -552,23 +575,7 @@ export function OrganizacaoView() {
       }
 
       if (replaceOnImport) {
-        const { error: paymentsError } = await supabase
-          .from("payments")
-          .delete()
-          .eq("organization_id", organizationId);
-        if (paymentsError) throw new Error(paymentsError.message);
-
-        const { error: invoicesError } = await supabase
-          .from("invoices")
-          .delete()
-          .eq("organization_id", organizationId);
-        if (invoicesError) throw new Error(invoicesError.message);
-
-        const { error: studentsError } = await supabase
-          .from("students")
-          .delete()
-          .eq("organization_id", organizationId);
-        if (studentsError) throw new Error(studentsError.message);
+        await purgeOperationalData(supabase, organizationId);
       }
 
       if (payload.data.organization && !isForeignBackup) {
@@ -692,23 +699,7 @@ export function OrganizacaoView() {
         throw new Error("Senha incorreta.");
       }
 
-      const { error: paymentsError } = await supabase
-        .from("payments")
-        .delete()
-        .eq("organization_id", organizationId);
-      if (paymentsError) throw new Error(paymentsError.message);
-
-      const { error: invoicesError } = await supabase
-        .from("invoices")
-        .delete()
-        .eq("organization_id", organizationId);
-      if (invoicesError) throw new Error(invoicesError.message);
-
-      const { error: studentsError } = await supabase
-        .from("students")
-        .delete()
-        .eq("organization_id", organizationId);
-      if (studentsError) throw new Error(studentsError.message);
+      await purgeOperationalData(supabase, organizationId);
 
       setSuccessMessage("Todos os dados operacionais foram excluídos.");
       setShowDeleteDataModal(false);

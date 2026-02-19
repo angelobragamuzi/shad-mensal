@@ -12,7 +12,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  CalendarDays,
+  Bell,
   FileText,
   HandCoins,
   LayoutDashboard,
@@ -21,7 +21,9 @@ import {
   Menu,
   QrCode,
   Settings,
+  Trash2,
   UsersRound,
+  Wallet,
   X,
 } from "lucide-react";
 import {
@@ -31,6 +33,12 @@ import {
   DEFAULT_SITE_ACCENT_COLOR,
   normalizeHexColor,
 } from "@/lib/shad-manager/branding";
+import {
+  SESSION_NOTIFICATION_EVENT,
+  clearSessionNotifications,
+  loadSessionNotifications,
+  type SessionNotification,
+} from "@/lib/shad-manager/session-notifications";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { getUserOrgContext } from "@/lib/supabase/auth-org";
@@ -73,8 +81,8 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/clientes", icon: UsersRound },
-  { label: "Calendário", href: "/calendario", icon: CalendarDays },
-  { label: "Cobranças", href: "/cobrancas", icon: QrCode },
+  { label: "PIX", href: "/pix", icon: QrCode },
+  { label: "Cobranças", href: "/cobrancas", icon: Wallet },
   { label: "Baixas", href: "/baixas", icon: HandCoins },
   { label: "Relatórios", href: "/relatorios", icon: FileText },
   { label: "Tarefas", href: "/tarefas", icon: ListTodo },
@@ -92,6 +100,8 @@ export function AppShell({ children }: AppShellProps) {
   const [isBrandingSupported, setIsBrandingSupported] = useState(true);
   const [logoLoadError, setLogoLoadError] = useState(false);
   const [authCheckWarning, setAuthCheckWarning] = useState<string | null>(null);
+  const [sessionNotifications, setSessionNotifications] = useState<SessionNotification[]>([]);
+  const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
 
   const loadSiteBranding = useCallback(
     async (organizationId: string, supabase = getSupabaseBrowserClient()) => {
@@ -226,11 +236,27 @@ export function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     setIsMenuOpen(false);
+    setIsNotificationPanelOpen(false);
   }, [pathname]);
 
   useEffect(() => {
     setLogoLoadError(false);
   }, [brandLogoUrl]);
+
+  useEffect(() => {
+    setSessionNotifications(loadSessionNotifications());
+
+    const onNotification = (event: Event) => {
+      const detail = (event as CustomEvent<SessionNotification>).detail;
+      if (!detail?.id || !detail?.message) return;
+      setSessionNotifications((previous) => [detail, ...previous].slice(0, 60));
+    };
+
+    window.addEventListener(SESSION_NOTIFICATION_EVENT, onNotification);
+    return () => {
+      window.removeEventListener(SESSION_NOTIFICATION_EVENT, onNotification);
+    };
+  }, []);
 
   useEffect(() => {
     const onBrandingChange = (event: Event) => {
@@ -267,6 +293,23 @@ export function AppShell({ children }: AppShellProps) {
     [brandLogoUrl, logoLoadError]
   );
   const isDefaultLogo = resolvedLogoSrc === "/manager.svg";
+
+  const notificationButtonLabel = useMemo(() => {
+    const count = sessionNotifications.length;
+    return count > 0 ? `Notificações (${count})` : "Notificações";
+  }, [sessionNotifications.length]);
+
+  const formatNotificationTime = (isoValue: string) =>
+    new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(isoValue));
+
+  const handleClearNotifications = () => {
+    setSessionNotifications([]);
+    clearSessionNotifications();
+  };
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -460,6 +503,59 @@ export function AppShell({ children }: AppShellProps) {
           </div>
           <div className="flex items-center gap-3">
             <span className="max-w-[220px] truncate text-sm text-[var(--muted)]">{userEmail}</span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsNotificationPanelOpen((value) => !value)}
+                className="btn-muted relative inline-flex h-9 w-9 items-center justify-center rounded-md"
+                aria-label={notificationButtonLabel}
+                title={notificationButtonLabel}
+              >
+                <Bell size={16} />
+                {sessionNotifications.length > 0 ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold text-[var(--accent-ink)]">
+                    {sessionNotifications.length > 9 ? "9+" : sessionNotifications.length}
+                  </span>
+                ) : null}
+              </button>
+
+              {isNotificationPanelOpen ? (
+                <div className="surface absolute right-0 top-11 z-40 w-[340px] max-w-[calc(100vw-2rem)] rounded-md border border-[var(--border)] p-3 shadow-xl">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-[var(--foreground-strong)]">Notificações da sessão</p>
+                    <button
+                      type="button"
+                      onClick={handleClearNotifications}
+                      disabled={sessionNotifications.length === 0}
+                      className="btn-muted inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Trash2 size={12} />
+                      Limpar
+                    </button>
+                  </div>
+
+                  <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+                    {sessionNotifications.length === 0 ? (
+                      <p className="rounded-md border border-white/10 bg-white/5 p-3 text-xs text-[var(--muted)]">
+                        Nenhuma notificação nesta sessão.
+                      </p>
+                    ) : (
+                      sessionNotifications.map((notification) => (
+                        <article
+                          key={notification.id}
+                          className="rounded-md border border-white/10 bg-white/5 px-3 py-2"
+                        >
+                          <p className="text-xs text-[var(--foreground)]">{notification.message}</p>
+                          <p className="mt-1 text-[11px] text-[var(--muted-soft)]">
+                            {formatNotificationTime(notification.createdAt)}
+                          </p>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <ThemeToggle />
           </div>
         </header>

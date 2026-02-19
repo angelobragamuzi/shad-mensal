@@ -16,9 +16,9 @@ set search_path = public, auth
 as $$
 begin
   if not public.has_org_role(p_org_id, array['owner','admin']::public.app_role[]) then
-    raise exception 'forbidden' using errcode = '42501';W
+    raise exception 'forbidden' using errcode = '42501';
   end if;
-EW
+
   return query
   select m.user_id, u.email, m.role, m.created_at
   from public.organization_members m

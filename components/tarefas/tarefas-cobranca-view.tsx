@@ -159,6 +159,7 @@ export function TarefasCobrancaView() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("todas");
@@ -176,6 +177,7 @@ export function TarefasCobrancaView() {
       if (contextError || !context) {
         throw new Error(contextError ?? "Falha ao carregar a organização.");
       }
+      setOrganizationId(context.organizationId);
 
       const [studentsResponse, invoicesResponse] = await Promise.all([
         supabase
@@ -309,15 +311,43 @@ export function TarefasCobrancaView() {
     };
   }, [tasks]);
 
+  const logTaskAction = useCallback(
+    async (
+      task: TaskItem,
+      outcome: "sent" | "failed" | "no_reply" | "promised" | "paid" | "other",
+      notes: string
+    ) => {
+      if (!organizationId) return;
+      const templateKind = task.kind === "atrasada" ? "overdue" : "reminder";
+      try {
+        const supabase = getSupabaseBrowserClient();
+        await supabase.rpc("log_collection_event", {
+          p_org_id: organizationId,
+          p_invoice_id: task.id,
+          p_channel: "whatsapp",
+          p_template_kind: templateKind,
+          p_outcome: outcome,
+          p_message: task.message,
+          p_notes: notes,
+        });
+      } catch {
+        // Keep UI flow responsive if audit logging fails.
+      }
+    },
+    [organizationId]
+  );
+
   const handleOpenWhatsapp = (task: TaskItem) => {
     setErrorMessage(null);
     setSuccessMessage(null);
     if (!task.whatsappPhone) {
       setErrorMessage(`Telefone inválido para WhatsApp em ${task.studentName}.`);
+      void logTaskAction(task, "failed", "Telefone inválido para disparo de cobrança.");
       return;
     }
 
     window.open(buildWhatsappUrl(task.whatsappPhone, task.message), "_blank", "noopener,noreferrer");
+    void logTaskAction(task, "sent", "Disparo pela central de tarefas.");
   };
 
   const handleCopyMessage = async (task: TaskItem) => {
@@ -327,6 +357,7 @@ export function TarefasCobrancaView() {
       await copyToClipboard(task.message);
       setCopiedTaskId(task.id);
       setSuccessMessage(`Mensagem copiada para ${task.studentName}.`);
+      void logTaskAction(task, "other", "Mensagem copiada na central de tarefas.");
     } catch {
       setErrorMessage("Não foi possível copiar a mensagem.");
     }
@@ -504,4 +535,3 @@ export function TarefasCobrancaView() {
     </section>
   );
 }
-

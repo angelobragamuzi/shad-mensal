@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Copy, Download, KeyRound, MessageCircle, QrCode, Wallet } from "lucide-react";
+import { Copy, Download, KeyRound, Mail, MessageCircle, QrCode, Wallet } from "lucide-react";
 import { buildPixPayload } from "@/lib/shad-manager/pix";
+import { emitSessionNotification } from "@/lib/shad-manager/session-notifications";
+import { getUserOrgContext } from "@/lib/supabase/auth-org";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 async function copyToClipboard(value: string): Promise<void> {
@@ -27,11 +29,13 @@ interface ShareClient {
   id: string;
   name: string;
   phone: string;
+  email: string;
 }
 
 interface TemplateSettingsRow {
   organization_id: string;
   qr_template_logo_url: string | null;
+  whatsapp_template: string | null;
 }
 
 type PaymentMethod = "pix" | "cash" | "card" | "transfer" | "other";
@@ -90,11 +94,36 @@ interface ReceiptPreviewState {
   kind: ReceiptPreviewKind;
 }
 
-type CobrancasViewMode = "pix" | "baixas" | "relatorios";
+interface CollectionOverviewMetrics {
+  totalOpenCount: number;
+  totalOpenCents: number;
+  overdueCount: number;
+  overdueCents: number;
+  dueTodayCount: number;
+  dueTodayCents: number;
+  dueNext7Count: number;
+  dueNext7Cents: number;
+}
+
+interface FollowUpInvoiceItem {
+  invoiceId: string;
+  studentId: string;
+  studentName: string;
+  studentPhone: string;
+  studentEmail: string;
+  dueDate: string;
+  openCents: number;
+  status: FinancialInvoiceRow["status"];
+}
+
+type CobrancasViewMode = "pix" | "operacao" | "baixas" | "relatorios";
 
 interface CobrancasViewProps {
   mode?: CobrancasViewMode;
 }
+
+const DEFAULT_WHATSAPP_TEMPLATE =
+  "Ola {{student_name}}, sua mensalidade esta em aberto. Podemos regularizar hoje?";
 
 function normalizeWhatsappPhone(phone: string): string | null {
   const digits = phone.replace(/\D/g, "");
@@ -141,6 +170,21 @@ function formatDateTime(dateTime: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(dateTime));
+}
+
+function toIsoDate(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function buildCollectionMessage(
+  template: string,
+  input: { studentName: string; amountCents: number; dueDate: string; daysOverdue: number }
+): string {
+  return template
+    .replaceAll("{{student_name}}", input.studentName)
+    .replaceAll("{{amount}}", formatCurrency(input.amountCents))
+    .replaceAll("{{due_date}}", formatDate(input.dueDate))
+    .replaceAll("{{days_overdue}}", String(Math.max(input.daysOverdue, 0)));
 }
 
 function detectReceiptPreviewKind(receiptUrl: string, fileName?: string | null): ReceiptPreviewKind {
@@ -471,6 +515,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [templateLogoUrl, setTemplateLogoUrl] = useState("");
+  const [whatsappTemplate, setWhatsappTemplate] = useState(DEFAULT_WHATSAPP_TEMPLATE);
   const [isLoadingTemplateSettings, setIsLoadingTemplateSettings] = useState(true);
   const [isSavingTemplateSettings, setIsSavingTemplateSettings] = useState(false);
   const [isLogoColumnAvailable, setIsLogoColumnAvailable] = useState(true);
@@ -481,11 +526,33 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [generationMonth, setGenerationMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [openInvoices, setOpenInvoices] = useState<OpenInvoiceItem[]>([]);
+  const [followUpInvoices, setFollowUpInvoices] = useState<FollowUpInvoiceItem[]>([]);
+  const [collectionOverview, setCollectionOverview] = useState<CollectionOverviewMetrics>({
+    totalOpenCount: 0,
+    totalOpenCents: 0,
+    overdueCount: 0,
+    overdueCents: 0,
+    dueTodayCount: 0,
+    dueTodayCents: 0,
+    dueNext7Count: 0,
+    dueNext7Cents: 0,
+  });
   const [monthlyReport, setMonthlyReport] = useState<MonthlyReportData>({
     payments: [],
     pendingInvoices: [],
   });
+  const [isLoadingCollectionOperations, setIsLoadingCollectionOperations] = useState(true);
+  const [isGeneratingInvoices, setIsGeneratingInvoices] = useState(false);
+  const [isMarkingOverdue, setIsMarkingOverdue] = useState(false);
+  const [isSendingPixEmail, setIsSendingPixEmail] = useState(false);
+  const [isSendingFollowUpEmailId, setIsSendingFollowUpEmailId] = useState<string | null>(null);
+  const [isSendingFollowUpEmailsBatch, setIsSendingFollowUpEmailsBatch] = useState(false);
+  const [showFollowUpBatchEmailModal, setShowFollowUpBatchEmailModal] = useState(false);
   const [isLoadingFinance, setIsLoadingFinance] = useState(true);
   const [isLoadingMonthlyReport, setIsLoadingMonthlyReport] = useState(true);
   const [isReceiptColumnAvailable, setIsReceiptColumnAvailable] = useState(true);
@@ -500,6 +567,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
   const [isExportingCsv, setIsExportingCsv] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const showPix = mode === "pix";
+  const showOperacao = mode === "operacao";
   const showBaixas = mode === "baixas";
   const showRelatorios = mode === "relatorios";
 
@@ -550,6 +618,16 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       overdueCents,
     };
   }, [monthlyReport]);
+  const todayIsoDate = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return toIsoDate(now);
+  }, []);
+  const followUpWithEmailCount = useMemo(
+    () => followUpInvoices.filter((item) => item.studentEmail.trim().length > 0).length,
+    [followUpInvoices]
+  );
+  const followUpWithoutEmailCount = followUpInvoices.length - followUpWithEmailCount;
 
   const resetFeedback = () => {
     setErrorMessage(null);
@@ -606,7 +684,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
   }, [pixPayload, showPix]);
 
   useEffect(() => {
-    if (!showPix) {
+    if (!showPix || !organizationId) {
       setIsLoadingClients(false);
       setClientsError(null);
       setClients([]);
@@ -624,7 +702,8 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         const supabase = getSupabaseBrowserClient();
         const { data, error } = await supabase
           .from("students")
-          .select("id, full_name, phone")
+          .select("id, full_name, phone, email")
+          .eq("organization_id", organizationId)
           .order("full_name", { ascending: true });
 
         if (error) {
@@ -635,6 +714,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
           id: String(row.id),
           name: String(row.full_name ?? "Cliente"),
           phone: String(row.phone ?? ""),
+          email: String(row.email ?? ""),
         }));
 
         if (isCancelled) return;
@@ -664,7 +744,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
     return () => {
       isCancelled = true;
     };
-  }, [showPix]);
+  }, [organizationId, showPix]);
 
   const loadOpenInvoices = useCallback(async () => {
     if (!showBaixas || !organizationId) {
@@ -680,6 +760,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         supabase
           .from("students")
           .select("id, full_name")
+          .eq("organization_id", organizationId)
           .order("full_name", { ascending: true }),
         supabase
           .from("invoices")
@@ -727,6 +808,145 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
     }
   }, [organizationId, showBaixas]);
 
+  const loadCollectionOperations = useCallback(async () => {
+    if (!showOperacao || !organizationId) {
+      setFollowUpInvoices([]);
+      setCollectionOverview({
+        totalOpenCount: 0,
+        totalOpenCents: 0,
+        overdueCount: 0,
+        overdueCents: 0,
+        dueTodayCount: 0,
+        dueTodayCents: 0,
+        dueNext7Count: 0,
+        dueNext7Cents: 0,
+      });
+      setIsLoadingCollectionOperations(false);
+      return;
+    }
+
+    setIsLoadingCollectionOperations(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const [studentsResponse, invoicesResponse] = await Promise.all([
+        supabase
+          .from("students")
+          .select("id, full_name, phone, email")
+          .eq("organization_id", organizationId),
+        supabase
+          .from("invoices")
+          .select("id, student_id, due_date, amount_cents, paid_amount_cents, status")
+          .eq("organization_id", organizationId)
+          .in("status", ["pending", "partial", "overdue"])
+          .order("due_date", { ascending: true })
+          .limit(500),
+      ]);
+
+      if (studentsResponse.error) throw new Error(studentsResponse.error.message);
+      if (invoicesResponse.error) throw new Error(invoicesResponse.error.message);
+
+      const studentById = new Map(
+        (studentsResponse.data ?? []).map((row) => [
+          String(row.id),
+          {
+            name: String(row.full_name ?? "Cliente"),
+            phone: String(row.phone ?? ""),
+            email: String(row.email ?? ""),
+          },
+        ])
+      );
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayIso = toIsoDate(today);
+      const dueNext7Date = new Date(today);
+      dueNext7Date.setDate(dueNext7Date.getDate() + 7);
+      const dueNext7Iso = toIsoDate(dueNext7Date);
+
+      let totalOpenCount = 0;
+      let totalOpenCents = 0;
+      let overdueCount = 0;
+      let overdueCents = 0;
+      let dueTodayCount = 0;
+      let dueTodayCents = 0;
+      let dueNext7Count = 0;
+      let dueNext7Cents = 0;
+
+      const items = ((invoicesResponse.data ?? []) as FinancialInvoiceRow[])
+        .map((invoice) => {
+          const student = studentById.get(invoice.student_id);
+          if (!student) return null;
+
+          const openCents = Math.max(invoice.amount_cents - invoice.paid_amount_cents, 0);
+          if (openCents <= 0) return null;
+
+          totalOpenCount += 1;
+          totalOpenCents += openCents;
+
+          const isOverdue = invoice.status === "overdue" || invoice.due_date < todayIso;
+          if (isOverdue) {
+            overdueCount += 1;
+            overdueCents += openCents;
+          } else if (invoice.due_date === todayIso) {
+            dueTodayCount += 1;
+            dueTodayCents += openCents;
+          } else if (invoice.due_date > todayIso && invoice.due_date <= dueNext7Iso) {
+            dueNext7Count += 1;
+            dueNext7Cents += openCents;
+          }
+
+          return {
+            invoiceId: invoice.id,
+            studentId: invoice.student_id,
+            studentName: student.name,
+            studentPhone: student.phone,
+            studentEmail: student.email,
+            dueDate: invoice.due_date,
+            openCents,
+            status: invoice.status,
+          } satisfies FollowUpInvoiceItem;
+        })
+        .filter((item): item is FollowUpInvoiceItem => Boolean(item));
+
+      items.sort((a, b) => {
+        const aOverdue = a.status === "overdue" || a.dueDate < todayIso;
+        const bOverdue = b.status === "overdue" || b.dueDate < todayIso;
+        if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+        if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+        return b.openCents - a.openCents;
+      });
+
+      setFollowUpInvoices(items.slice(0, 12));
+      setCollectionOverview({
+        totalOpenCount,
+        totalOpenCents,
+        overdueCount,
+        overdueCents,
+        dueTodayCount,
+        dueTodayCents,
+        dueNext7Count,
+        dueNext7Cents,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível carregar a operação de cobrança.";
+      setErrorMessage(message);
+      setFollowUpInvoices([]);
+      setCollectionOverview({
+        totalOpenCount: 0,
+        totalOpenCents: 0,
+        overdueCount: 0,
+        overdueCents: 0,
+        dueTodayCount: 0,
+        dueTodayCents: 0,
+        dueNext7Count: 0,
+        dueNext7Cents: 0,
+      });
+    } finally {
+      setIsLoadingCollectionOperations(false);
+    }
+  }, [organizationId, showOperacao]);
+
   const loadMonthlyReport = useCallback(async () => {
     if (!showRelatorios || !organizationId) {
       setMonthlyReport({ payments: [], pendingInvoices: [] });
@@ -744,6 +964,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       const studentsResponse = await supabase
         .from("students")
         .select("id, full_name")
+        .eq("organization_id", organizationId)
         .order("full_name", { ascending: true });
       if (studentsResponse.error) throw new Error(studentsResponse.error.message);
 
@@ -840,6 +1061,10 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
   }, [loadOpenInvoices]);
 
   useEffect(() => {
+    void loadCollectionOperations();
+  }, [loadCollectionOperations]);
+
+  useEffect(() => {
     void loadMonthlyReport();
   }, [loadMonthlyReport]);
 
@@ -914,77 +1139,64 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
 
       try {
         const supabase = getSupabaseBrowserClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!isCancelled) {
-          setUserId(user?.id ?? null);
-        }
-
-        if (showPix) {
-          const { data, error } = await supabase
-            .from("organization_settings")
-            .select("organization_id, qr_template_logo_url")
-            .limit(1)
-            .maybeSingle();
-
-          if (error) {
-            const normalizedMessage = error.message.toLowerCase();
-            if (
-              normalizedMessage.includes("qr_template_logo_url") &&
-              normalizedMessage.includes("does not exist")
-            ) {
-              setIsLogoColumnAvailable(false);
-
-              const fallback = await supabase
-                .from("organization_settings")
-                .select("organization_id")
-                .limit(1)
-                .maybeSingle();
-
-              if (fallback.error) {
-                throw new Error(fallback.error.message);
-              }
-
-              if (isCancelled) return;
-
-              setOrganizationId((fallback.data?.organization_id as string | undefined) ?? null);
-              setTemplateLogoUrl("");
-              setErrorMessage(
-                "A coluna qr_template_logo_url ainda não existe no banco. Rode a migration 202602140001 para habilitar o salvamento do logo."
-              );
-              return;
-            }
-            throw new Error(error.message);
-          }
-
-          if (isCancelled) return;
-
-          setIsLogoColumnAvailable(true);
-          const row = data as TemplateSettingsRow | null;
-          if (!row) {
-            setOrganizationId(null);
-            return;
-          }
-
-          setOrganizationId(row.organization_id);
-          setTemplateLogoUrl(row.qr_template_logo_url?.trim() ?? "");
-          return;
-        }
-
-        const baseSettings = await supabase
-          .from("organization_settings")
-          .select("organization_id")
-          .limit(1)
-          .maybeSingle();
-
-        if (baseSettings.error) {
-          throw new Error(baseSettings.error.message);
+        const { data: context, error: contextError } = await getUserOrgContext(supabase, { force: true });
+        if (contextError || !context) {
+          throw new Error(contextError ?? "Falha ao carregar a organização.");
         }
 
         if (isCancelled) return;
 
-        setOrganizationId((baseSettings.data?.organization_id as string | undefined) ?? null);
+        setOrganizationId(context.organizationId);
+        setUserId(context.user.id);
+
+        let hasQrLogoColumn = showPix;
+        const primaryColumns = showPix
+          ? "organization_id, qr_template_logo_url, whatsapp_template"
+          : "organization_id, whatsapp_template";
+
+        const primaryResponse = await supabase
+          .from("organization_settings")
+          .select(primaryColumns)
+          .eq("organization_id", context.organizationId)
+          .maybeSingle();
+
+        let settingsData: Record<string, unknown> | null = null;
+        if (primaryResponse.error) {
+          const normalizedMessage = primaryResponse.error.message.toLowerCase();
+          const missingLogoColumn =
+            normalizedMessage.includes("qr_template_logo_url") &&
+            normalizedMessage.includes("does not exist");
+
+          if (missingLogoColumn && showPix) {
+            hasQrLogoColumn = false;
+            const fallbackResponse = await supabase
+              .from("organization_settings")
+              .select("organization_id, whatsapp_template")
+              .eq("organization_id", context.organizationId)
+              .maybeSingle();
+            if (fallbackResponse.error) {
+              throw new Error(fallbackResponse.error.message);
+            }
+            settingsData = (fallbackResponse.data ?? null) as Record<string, unknown> | null;
+          } else {
+            throw new Error(primaryResponse.error.message);
+          }
+        } else {
+          settingsData = (primaryResponse.data ?? null) as Record<string, unknown> | null;
+        }
+
+        if (isCancelled) return;
+
+        setIsLogoColumnAvailable(hasQrLogoColumn);
+        if (!hasQrLogoColumn && showPix) {
+          setErrorMessage(
+            "A coluna qr_template_logo_url ainda não existe no banco. Rode a migration 202602140001 para habilitar o salvamento do logo."
+          );
+        }
+
+        const row = settingsData as Partial<TemplateSettingsRow> | null;
+        setTemplateLogoUrl(hasQrLogoColumn ? String(row?.qr_template_logo_url ?? "").trim() : "");
+        setWhatsappTemplate(String(row?.whatsapp_template ?? "").trim() || DEFAULT_WHATSAPP_TEMPLATE);
       } catch (error) {
         if (isCancelled) return;
         const message =
@@ -1092,6 +1304,365 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
     window.open(buildWhatsappUrl(phone, message), "_blank", "noopener,noreferrer");
   };
 
+  const logCollectionAction = async (input: {
+    invoiceId: string;
+    channel?: "whatsapp" | "email" | "phone" | "manual";
+    templateKind: "reminder" | "overdue" | "custom";
+    outcome: "sent" | "failed" | "no_reply" | "promised" | "paid" | "other";
+    message: string;
+    notes?: string;
+  }) => {
+    if (!organizationId) return;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      await supabase.rpc("log_collection_event", {
+        p_org_id: organizationId,
+        p_invoice_id: input.invoiceId,
+        p_channel: input.channel ?? "whatsapp",
+        p_template_kind: input.templateKind,
+        p_outcome: input.outcome,
+        p_message: input.message,
+        p_notes: input.notes ?? null,
+      });
+    } catch {
+      // Do not block main cobrança workflow when audit logging fails.
+    }
+  };
+
+  const handleSendFollowUpWhatsapp = (item: FollowUpInvoiceItem) => {
+    resetFeedback();
+    const phone = normalizeWhatsappPhone(item.studentPhone);
+    if (!phone) {
+      setErrorMessage(`Telefone inválido para WhatsApp em ${item.studentName}.`);
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(`${item.dueDate}T00:00:00`);
+    const daysOverdue = Math.max(
+      0,
+      Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+    );
+    const templateKind = daysOverdue > 0 ? "overdue" : "reminder";
+    const message = buildCollectionMessage(whatsappTemplate, {
+      studentName: item.studentName,
+      amountCents: item.openCents,
+      dueDate: item.dueDate,
+      daysOverdue,
+    });
+
+    window.open(buildWhatsappUrl(phone, message), "_blank", "noopener,noreferrer");
+    void logCollectionAction({
+      invoiceId: item.invoiceId,
+      templateKind,
+      outcome: "sent",
+      message,
+      notes: `Follow-up operacional (${templateKind}).`,
+    });
+    setSuccessMessage(`Cobrança enviada para ${item.studentName} no WhatsApp.`);
+  };
+
+  const sendChargeEmail = useCallback(
+    async (input: {
+      to: string;
+      studentName: string;
+      amountCents?: number | null;
+      dueDate?: string | null;
+      subject?: string | null;
+      customMessage?: string | null;
+      pixPayload?: string | null;
+    }) => {
+      if (!organizationId) {
+        throw new Error("Organização não identificada.");
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        throw new Error(sessionError?.message ?? "Sessão inválida para envio de e-mail.");
+      }
+
+      const response = await fetch("/api/cobranca/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          organizationId,
+          to: input.to,
+          studentName: input.studentName,
+          amountCents: input.amountCents ?? null,
+          dueDate: input.dueDate ?? null,
+          subject: input.subject ?? null,
+          customMessage: input.customMessage ?? null,
+          pixPayload: input.pixPayload ?? null,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Não foi possível enviar o e-mail.");
+      }
+
+      emitSessionNotification({
+        tone: "success",
+        message: `E-mail enviado para ${input.studentName} (${input.to}).`,
+      });
+    },
+    [organizationId]
+  );
+
+  const handleSendPixEmail = async () => {
+    resetFeedback();
+    if (!selectedClient) {
+      setErrorMessage("Selecione um cliente para envio por e-mail.");
+      return;
+    }
+    if (!selectedClient.email.trim()) {
+      setErrorMessage(`Cliente ${selectedClient.name} sem e-mail cadastrado.`);
+      return;
+    }
+
+    setIsSendingPixEmail(true);
+    try {
+      const amountCents = parseAmountToCents(amount);
+      const effectivePixPayload =
+        pixPayload || (pixKey.trim() ? `Chave PIX para pagamento: ${pixKey.trim()}` : null);
+      const message = [
+        `Olá ${selectedClient.name},`,
+        amountCents
+          ? `Sua cobrança está em aberto no valor de ${formatCurrency(amountCents)}.`
+          : "Sua cobrança está disponível para pagamento.",
+        effectivePixPayload
+          ? "Abaixo você encontra os dados de pagamento via PIX."
+          : "Entre em contato para receber os dados de pagamento.",
+      ].join("\n\n");
+
+      await sendChargeEmail({
+        to: selectedClient.email.trim(),
+        studentName: selectedClient.name,
+        amountCents: amountCents ?? null,
+        subject: `Cobrança via PIX - ${merchantName || "Financeiro"}`,
+        customMessage: message,
+        pixPayload: effectivePixPayload,
+      });
+
+      setSuccessMessage(`E-mail de cobrança enviado para ${selectedClient.name}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível enviar e-mail.";
+      setErrorMessage(message);
+    } finally {
+      setIsSendingPixEmail(false);
+    }
+  };
+
+  const handleSendFollowUpEmail = async (
+    item: FollowUpInvoiceItem,
+    options?: { silent?: boolean }
+  ): Promise<boolean> => {
+    const isSilent = Boolean(options?.silent);
+    if (!isSilent) {
+      resetFeedback();
+    }
+
+    if (!item.studentEmail.trim()) {
+      if (!isSilent) {
+        setErrorMessage(`Cliente ${item.studentName} sem e-mail cadastrado.`);
+      }
+      await logCollectionAction({
+        invoiceId: item.invoiceId,
+        channel: "email",
+        templateKind: "custom",
+        outcome: "failed",
+        message: "",
+        notes: "Tentativa de envio sem e-mail cadastrado.",
+      });
+      return false;
+    }
+
+    setIsSendingFollowUpEmailId(item.invoiceId);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dueDate = new Date(`${item.dueDate}T00:00:00`);
+      const daysOverdue = Math.max(
+        0,
+        Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+      );
+      const templateKind = daysOverdue > 0 ? "overdue" : "reminder";
+      const message = buildCollectionMessage(whatsappTemplate, {
+        studentName: item.studentName,
+        amountCents: item.openCents,
+        dueDate: item.dueDate,
+        daysOverdue,
+      });
+      const effectivePixPayload =
+        pixPayload || (pixKey.trim() ? `Chave PIX para pagamento: ${pixKey.trim()}` : null);
+
+      await sendChargeEmail({
+        to: item.studentEmail.trim(),
+        studentName: item.studentName,
+        amountCents: item.openCents,
+        dueDate: item.dueDate,
+        subject:
+          daysOverdue > 0
+            ? `Cobrança em atraso - ${item.studentName}`
+            : `Lembrete de vencimento - ${item.studentName}`,
+        customMessage: message,
+        pixPayload: effectivePixPayload,
+      });
+
+      await logCollectionAction({
+        invoiceId: item.invoiceId,
+        channel: "email",
+        templateKind,
+        outcome: "sent",
+        message,
+        notes: "Follow-up por e-mail.",
+      });
+      if (!isSilent) {
+        setSuccessMessage(`E-mail de cobrança enviado para ${item.studentName}.`);
+      }
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível enviar e-mail.";
+      if (!isSilent) {
+        setErrorMessage(message);
+      }
+      await logCollectionAction({
+        invoiceId: item.invoiceId,
+        channel: "email",
+        templateKind: "custom",
+        outcome: "failed",
+        message: "",
+        notes: `Falha no envio de e-mail: ${message}`,
+      });
+      return false;
+    } finally {
+      setIsSendingFollowUpEmailId(null);
+    }
+  };
+
+  const handleSendAllFollowUpEmails = async () => {
+    resetFeedback();
+    if (followUpInvoices.length === 0) {
+      setErrorMessage("Sem cobranças pendentes para follow-up.");
+      return;
+    }
+    setShowFollowUpBatchEmailModal(false);
+
+    setIsSendingFollowUpEmailsBatch(true);
+    let sentCount = 0;
+    let failedCount = 0;
+
+    try {
+      for (const item of followUpInvoices) {
+        const sent = await handleSendFollowUpEmail(item, { silent: true });
+        if (sent) {
+          sentCount += 1;
+        } else {
+          failedCount += 1;
+        }
+      }
+
+      if (sentCount > 0 && failedCount === 0) {
+        setSuccessMessage(`E-mails enviados com sucesso para ${sentCount} cobrança(s).`);
+      } else if (sentCount > 0) {
+        setSuccessMessage(`Envio em lote concluído: ${sentCount} enviado(s) e ${failedCount} com falha.`);
+      } else {
+        setErrorMessage(`Não foi possível enviar os e-mails da fila (${failedCount} falha(s)).`);
+      }
+    } finally {
+      setIsSendingFollowUpEmailsBatch(false);
+    }
+  };
+
+  const openFollowUpBatchEmailModal = () => {
+    resetFeedback();
+    if (followUpInvoices.length === 0) {
+      setErrorMessage("Sem cobranças pendentes para follow-up.");
+      return;
+    }
+    setShowFollowUpBatchEmailModal(true);
+  };
+
+  const closeFollowUpBatchEmailModal = () => {
+    if (isSendingFollowUpEmailsBatch) return;
+    setShowFollowUpBatchEmailModal(false);
+  };
+
+  const handleGenerateInvoicesForMonth = async () => {
+    resetFeedback();
+    if (!organizationId) {
+      setErrorMessage("Organização não identificada para gerar cobranças.");
+      return;
+    }
+    if (!/^\d{4}-\d{2}$/.test(generationMonth)) {
+      setErrorMessage("Selecione um mês válido para gerar cobranças.");
+      return;
+    }
+
+    setIsGeneratingInvoices(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.rpc("generate_invoices_for_period", {
+        p_org_id: organizationId,
+        p_reference_date: `${generationMonth}-01`,
+      });
+
+      if (error) throw new Error(error.message);
+
+      const firstRow = Array.isArray(data)
+        ? (data[0] as { created_count?: number; skipped_count?: number } | undefined)
+        : undefined;
+
+      const createdCount = Number(firstRow?.created_count ?? 0);
+      const skippedCount = Number(firstRow?.skipped_count ?? 0);
+      setSuccessMessage(
+        `Cobranças processadas: ${createdCount} novas e ${skippedCount} já existentes para o mês.`
+      );
+
+      await Promise.all([loadCollectionOperations(), loadOpenInvoices(), loadMonthlyReport()]);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível gerar cobranças recorrentes.";
+      setErrorMessage(message);
+    } finally {
+      setIsGeneratingInvoices(false);
+    }
+  };
+
+  const handleMarkOverdueInvoices = async () => {
+    resetFeedback();
+    if (!organizationId) {
+      setErrorMessage("Organização não identificada para atualizar atrasos.");
+      return;
+    }
+
+    setIsMarkingOverdue(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.rpc("mark_overdue_invoices", {
+        p_org_id: organizationId,
+      });
+      if (error) throw new Error(error.message);
+
+      const updatedCount = Number(data ?? 0);
+      setSuccessMessage(`${updatedCount} cobrança(s) atualizada(s) para atraso.`);
+      await Promise.all([loadCollectionOperations(), loadOpenInvoices(), loadMonthlyReport()]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível atualizar atrasos.";
+      setErrorMessage(message);
+    } finally {
+      setIsMarkingOverdue(false);
+    }
+  };
+
   const handleLogoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1124,21 +1695,19 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       return;
     }
 
-    if (!isLogoColumnAvailable) {
-      setErrorMessage(
-        "Banco sem suporte para logo do template. Execute a migration 202602140001 e tente salvar novamente."
-      );
-      return;
-    }
-
     setIsSavingTemplateSettings(true);
     try {
       const supabase = getSupabaseBrowserClient();
+      const payload: Record<string, string> = {
+        whatsapp_template: whatsappTemplate.trim() || DEFAULT_WHATSAPP_TEMPLATE,
+      };
+      if (isLogoColumnAvailable) {
+        payload.qr_template_logo_url = templateLogoUrl.trim();
+      }
+
       const { error } = await supabase
         .from("organization_settings")
-        .update({
-          qr_template_logo_url: templateLogoUrl.trim(),
-        })
+        .update(payload)
         .eq("organization_id", organizationId);
 
       if (error) {
@@ -1148,14 +1717,24 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
           normalizedMessage.includes("does not exist")
         ) {
           setIsLogoColumnAvailable(false);
-          throw new Error(
-            "A coluna qr_template_logo_url não existe no banco. Execute a migration 202602140001."
+          const fallback = await supabase
+            .from("organization_settings")
+            .update({
+              whatsapp_template: whatsappTemplate.trim() || DEFAULT_WHATSAPP_TEMPLATE,
+            })
+            .eq("organization_id", organizationId);
+          if (fallback.error) {
+            throw new Error(fallback.error.message);
+          }
+          setSuccessMessage(
+            "Template WhatsApp salvo. A coluna de logo ainda não existe (rode a migration 202602140001)."
           );
+          return;
         }
         throw new Error(error.message);
       }
 
-      setSuccessMessage("Logo do template salvo.");
+      setSuccessMessage("Configurações de cobrança salvas.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível salvar o logo do template.";
       setErrorMessage(message);
@@ -1282,7 +1861,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       setReceiptDataUrl("");
       setReceiptFileName("");
       setSuccessMessage("Baixa registrada com sucesso.");
-      await Promise.all([loadOpenInvoices(), loadMonthlyReport()]);
+      await Promise.all([loadOpenInvoices(), loadMonthlyReport(), loadCollectionOperations()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível registrar a baixa.";
       setErrorMessage(message);
@@ -1712,6 +2291,20 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
   };
 
   const pageCopy = useMemo(() => {
+    if (mode === "pix") {
+      return {
+        title: "Gerador PIX",
+        description: "Gere QR Code PIX, compartilhe no WhatsApp e baixe o template visual em segundos.",
+        badge: "Módulo PIX",
+      };
+    }
+    if (mode === "operacao") {
+      return {
+        title: "Operação de cobrança",
+        description: "Gere cobranças recorrentes, atualize atrasos e acione follow-ups por cliente.",
+        badge: "Módulo cobrança",
+      };
+    }
     if (mode === "baixas") {
       return {
         title: "Baixas e comprovantes",
@@ -1727,9 +2320,9 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       };
     }
     return {
-      title: "PIX, cobrança e template",
-      description: "Gere um QR Code PIX na hora e baixe a arte pronta no padrão visual do sistema.",
-      badge: "Atualização em tempo real",
+      title: "Cobranças",
+      description: "Gestão financeira da carteira de cobrança.",
+      badge: "Módulo financeiro",
     };
   }, [mode]);
 
@@ -1748,7 +2341,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         </div>
       </header>
 
-      {payloadError ? (
+      {showPix && payloadError ? (
         <div className="surface rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
           {payloadError}
         </div>
@@ -1766,8 +2359,174 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         </div>
       ) : null}
 
-      {showPix ? (
-        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      {showPix || showOperacao ? (
+        <div className="flex flex-col gap-4">
+        {showOperacao ? (
+        <section className="surface rounded-md p-4 md:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-zinc-100">Operação de cobrança recorrente</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Gere cobranças do mês, atualize atrasos e execute follow-up rapidamente no WhatsApp.
+              </p>
+            </div>
+            <label className="w-full max-w-[220px]">
+              <span className="mb-1 block text-xs text-zinc-500">Competência</span>
+              <input
+                type="month"
+                value={generationMonth}
+                onChange={(event) => setGenerationMonth(event.target.value)}
+                className="field glow-focus h-10 w-full rounded-md px-3 text-sm outline-none"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleGenerateInvoicesForMonth()}
+              disabled={isGeneratingInvoices || !organizationId}
+              className="btn-primary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isGeneratingInvoices ? "Gerando..." : "Gerar cobranças do mês"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleMarkOverdueInvoices()}
+              disabled={isMarkingOverdue || !organizationId}
+              className="btn-muted inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isMarkingOverdue ? "Atualizando..." : "Atualizar atrasos"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void loadCollectionOperations()}
+              disabled={isLoadingCollectionOperations || !organizationId}
+              className="btn-muted inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoadingCollectionOperations ? "Atualizando painel..." : "Atualizar painel"}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <article className="rounded-md border border-white/10 bg-white/5 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Carteira aberta</p>
+              <p className="mt-1 text-base font-semibold text-zinc-100">
+                {formatCurrency(collectionOverview.totalOpenCents)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">{collectionOverview.totalOpenCount} cobrança(s)</p>
+            </article>
+            <article className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-red-200/80">Atrasadas</p>
+              <p className="mt-1 text-base font-semibold text-red-200">
+                {formatCurrency(collectionOverview.overdueCents)}
+              </p>
+              <p className="mt-1 text-xs text-red-200/80">{collectionOverview.overdueCount} cobrança(s)</p>
+            </article>
+            <article className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-amber-200/80">Vence hoje</p>
+              <p className="mt-1 text-base font-semibold text-amber-200">
+                {formatCurrency(collectionOverview.dueTodayCents)}
+              </p>
+              <p className="mt-1 text-xs text-amber-200/80">{collectionOverview.dueTodayCount} cobrança(s)</p>
+            </article>
+            <article className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-emerald-200/80">Próx. 7 dias</p>
+              <p className="mt-1 text-base font-semibold text-emerald-200">
+                {formatCurrency(collectionOverview.dueNext7Cents)}
+              </p>
+              <p className="mt-1 text-xs text-emerald-200/80">{collectionOverview.dueNext7Count} cobrança(s)</p>
+            </article>
+          </div>
+
+          <div className="mt-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-zinc-100">Fila de follow-up</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  As próximas cobranças para contato rápido (prioridade para vencidas).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openFollowUpBatchEmailModal}
+                disabled={
+                  isLoadingCollectionOperations ||
+                  followUpInvoices.length === 0 ||
+                  isSendingFollowUpEmailsBatch ||
+                  Boolean(isSendingFollowUpEmailId)
+                }
+                className="btn-muted inline-flex items-center gap-2 self-start rounded-md px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Mail size={13} />
+                {isSendingFollowUpEmailsBatch ? "Enviando em lote..." : "Enviar e-mail para todos"}
+              </button>
+            </div>
+
+            <div className="mt-2 space-y-2">
+              {isLoadingCollectionOperations ? (
+                <p className="text-xs text-zinc-500">Carregando fila de cobrança...</p>
+              ) : followUpInvoices.length === 0 ? (
+                <p className="rounded-md border border-white/10 bg-white/5 p-3 text-xs text-zinc-500">
+                  Sem cobranças pendentes para follow-up.
+                </p>
+              ) : (
+                followUpInvoices.map((item) => {
+                  const hasWhatsapp = Boolean(normalizeWhatsappPhone(item.studentPhone));
+                  const isOverdue = item.status === "overdue" || item.dueDate < todayIsoDate;
+                  return (
+                    <article key={item.invoiceId} className="rounded-md border border-white/10 bg-white/5 p-3">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-100">{item.studentName}</p>
+                          <p className="mt-1 text-xs text-zinc-400">
+                            Vencimento: {formatDate(item.dueDate)} • Aberto: {formatCurrency(item.openCents)}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            {isOverdue ? "Status: atrasada" : "Status: em aberto"} • Telefone:{" "}
+                            {item.studentPhone || "não informado"}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            E-mail: {item.studentEmail || "não informado"}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSendFollowUpWhatsapp(item)}
+                            disabled={!hasWhatsapp || isSendingFollowUpEmailsBatch}
+                            className="btn-primary inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <MessageCircle size={13} />
+                            WhatsApp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleSendFollowUpEmail(item)}
+                            disabled={
+                              isSendingFollowUpEmailsBatch ||
+                              isSendingFollowUpEmailId === item.invoiceId ||
+                              !item.studentEmail.trim()
+                            }
+                            className="btn-muted inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Mail size={13} />
+                            {isSendingFollowUpEmailId === item.invoiceId ? "Enviando..." : "E-mail"}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </section>
+        ) : null}
+
+        {showPix ? (
+        <div id="pix-generator" className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="surface rounded-md p-4 md:p-5">
           <div className="grid gap-3 md:grid-cols-2">
             <label className="md:col-span-2">
@@ -1837,10 +2596,10 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
                 <button
                   type="button"
                   onClick={() => void handleSaveTemplateSettings()}
-                  disabled={isSavingTemplateSettings || isLoadingTemplateSettings || !isLogoColumnAvailable}
+                  disabled={isSavingTemplateSettings || isLoadingTemplateSettings}
                   className="btn-primary inline-flex h-9 w-full items-center justify-center rounded-md px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
                 >
-                  {isSavingTemplateSettings ? "Salvando..." : "Salvar logo"}
+                  {isSavingTemplateSettings ? "Salvando..." : "Salvar configurações"}
                 </button>
               </div>
 
@@ -1850,10 +2609,25 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
                 ) : null}
                 {!isLogoColumnAvailable ? (
                   <p className="text-xs text-amber-300">
-                    Migration pendente: execute a `202602140001_shad-manager_qr-template-customization.sql`.
+                    Migration pendente para logo: execute a `202602140001_shad-manager_qr-template-customization.sql`.
                   </p>
                 ) : null}
               </div>
+
+              <label className="mt-3 block">
+                <span className="mb-1 block text-sm text-zinc-300">Template padrão do WhatsApp</span>
+                <textarea
+                  value={whatsappTemplate}
+                  onChange={(event) => setWhatsappTemplate(event.target.value)}
+                  rows={3}
+                  className="field glow-focus w-full rounded-md px-3 py-2 text-xs outline-none"
+                  placeholder="Ola {{student_name}}, sua mensalidade de {{amount}} vence em {{due_date}}."
+                />
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Variáveis: {"{{student_name}}"}, {"{{amount}}"}, {"{{due_date}}"},{" "}
+                  {"{{days_overdue}}"}.
+                </p>
+              </label>
 
               <div className="mt-3 grid gap-3 md:grid-cols-[1fr_minmax(210px,260px)] md:items-end">
                 <div>
@@ -1869,6 +2643,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/svg+xml"
                     onChange={handleLogoFileChange}
+                    disabled={!isLogoColumnAvailable}
                     className="field h-10 w-full rounded-md px-2 text-xs file:mr-2 file:rounded file:border-0 file:bg-[var(--accent)] file:px-2.5 file:py-1.5 file:text-[10px] file:font-semibold file:text-[var(--accent-ink)]"
                   />
                 </label>
@@ -1908,7 +2683,9 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
                   ))}
                 </select>
                 <div className="inline-flex h-11 w-full items-center rounded-md border border-white/10 px-3 text-xs text-zinc-400">
-                  {selectedClient?.phone || "Telefone não informado"}
+                  {(selectedClient?.phone || "Telefone não informado") +
+                    " • " +
+                    (selectedClient?.email || "E-mail não informado")}
                 </div>
               </div>
               {clientsError ? <p className="mt-2 text-xs text-red-300">{clientsError}</p> : null}
@@ -1937,6 +2714,15 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
             >
               <MessageCircle size={14} />
               WhatsApp (chave)
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSendPixEmail()}
+              disabled={isSendingPixEmail || !selectedClientId || !selectedClient?.email.trim()}
+              className="btn-muted inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Mail size={14} />
+              {isSendingPixEmail ? "Enviando..." : "E-mail"}
             </button>
             <button
               type="button"
@@ -2046,6 +2832,8 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
             </button>
           </div>
         </aside>
+        </div>
+        ) : null}
         </div>
       ) : null}
 
@@ -2305,8 +3093,47 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
           ) : null}
         </section>
       ) : null}
+
+      {showFollowUpBatchEmailModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
+          <div className="surface w-full max-w-md rounded-md border border-white/10 p-5">
+            <p className="text-base font-semibold text-zinc-100">Enviar e-mails da lista</p>
+            <p className="mt-2 text-sm text-zinc-300">
+              Você vai enviar e-mail para <strong>{followUpWithEmailCount}</strong>{" "}
+              {followUpWithEmailCount === 1 ? "pessoa" : "pessoas"} da lista de cobrança.
+            </p>
+            {followUpWithoutEmailCount > 0 ? (
+              <p className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">
+                {followUpWithoutEmailCount}{" "}
+                {followUpWithoutEmailCount === 1 ? "cliente está sem e-mail" : "clientes estão sem e-mail"} e
+                {followUpWithoutEmailCount === 1 ? " será ignorado." : " serão ignorados."}
+              </p>
+            ) : null}
+            <p className="mt-2 text-xs text-zinc-500">
+              Esse envio pode demorar alguns segundos. Você pode acompanhar a mensagem de resultado ao final.
+            </p>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeFollowUpBatchEmailModal}
+                disabled={isSendingFollowUpEmailsBatch}
+                className="btn-muted rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSendAllFollowUpEmails()}
+                disabled={isSendingFollowUpEmailsBatch || followUpWithEmailCount === 0}
+                className="btn-primary rounded-md px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSendingFollowUpEmailsBatch ? "Enviando..." : "Enviar agora"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
-
-

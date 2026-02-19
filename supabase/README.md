@@ -39,7 +39,20 @@ For all organizations, call with service role (recommended via scheduled job):
 select public.mark_overdue_invoices(null);
 ```
 
-## 5) Frontend data mapping notes
+## 5) Geração recorrente de cobranças (mensal)
+
+Para gerar cobranças do mês de uma organização:
+```sql
+select * from public.generate_invoices_for_period('<ORG_ID>'::uuid, current_date);
+```
+
+## 6) Histórico de contatos de cobrança
+
+A tabela `public.collection_events` registra disparos e ações de follow-up.
+- O frontend usa `public.log_collection_event(...)` para registrar cobranças via WhatsApp.
+- RLS habilitado por organização.
+
+## 7) Frontend data mapping notes
 
 - `students.amount_cents` -> monthly fee value in cents.
 - `invoices.status` values:

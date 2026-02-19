@@ -1,5 +1,5 @@
 import { CobrancasView } from "@/components/cobrancas/cobrancas-view";
 
 export default function CobrancasPage() {
-  return <CobrancasView mode="pix" />;
+  return <CobrancasView mode="operacao" />;
 }
