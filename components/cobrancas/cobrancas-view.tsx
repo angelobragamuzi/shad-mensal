@@ -131,7 +131,7 @@ interface CobrancasViewProps {
 }
 
 const DEFAULT_WHATSAPP_TEMPLATE =
-  "Ola {{student_name}}, sua mensalidade esta em aberto. Podemos regularizar hoje?";
+  "Olá {{student_name}}, sua mensalidade está em aberto. Podemos regularizar hoje?";
 
 function normalizeWhatsappPhone(phone: string): string | null {
   const digits = phone.replace(/\D/g, "");
@@ -242,6 +242,10 @@ function parseAmountToCents(value: string): number | null {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return Math.round(parsed * 100);
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function buildMonthRange(referenceMonth: string) {
@@ -1431,6 +1435,8 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       subject?: string | null;
       customMessage?: string | null;
       pixPayload?: string | null;
+      includePix?: boolean;
+      notifyOnSuccess?: boolean;
     }) => {
       if (!organizationId) {
         throw new Error("Organização não identificada.");
@@ -1460,6 +1466,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
           subject: input.subject ?? null,
           customMessage: input.customMessage ?? null,
           pixPayload: input.pixPayload ?? null,
+          includePix: input.includePix ?? true,
         }),
       });
 
@@ -1468,10 +1475,12 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         throw new Error(payload?.error ?? "Não foi possível enviar o e-mail.");
       }
 
-      emitSessionNotification({
-        tone: "success",
-        message: `E-mail enviado para ${input.studentName} (${input.to}).`,
-      });
+      if (input.notifyOnSuccess !== false) {
+        emitSessionNotification({
+          tone: "success",
+          message: `E-mail enviado para ${input.studentName} (${input.to}).`,
+        });
+      }
     },
     [organizationId]
   );
@@ -1996,10 +2005,61 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         throw new Error(error.message);
       }
 
+      let postSettlementMessage = "Baixa registrada com sucesso.";
+      const { data: studentData, error: studentError } = await supabase
+        .from("students")
+        .select("full_name, email")
+        .eq("organization_id", organizationId)
+        .eq("id", selectedSettlementInvoice.studentId)
+        .maybeSingle();
+
+      if (studentError) {
+        postSettlementMessage =
+          "Baixa registrada com sucesso. Não foi possível carregar o e-mail do cliente para enviar a confirmação.";
+      } else {
+        const studentName = String(studentData?.full_name ?? selectedSettlementInvoice.studentName).trim() || "cliente";
+        const studentEmail = String(studentData?.email ?? "").trim();
+
+        if (!isValidEmail(studentEmail)) {
+          postSettlementMessage =
+            `Baixa registrada com sucesso. ${studentName} não possui e-mail válido cadastrado para confirmação.`;
+        } else {
+          const remainingCents = Math.max(selectedSettlementInvoice.openCents - amountCents, 0);
+          const confirmationMessage = [
+            `Olá ${studentName},`,
+            `Confirmamos o recebimento de ${formatCurrency(amountCents)} e esse valor foi abatido da sua dívida.`,
+            `Vencimento da cobrança: ${formatDate(selectedSettlementInvoice.dueDate)}.`,
+            remainingCents > 0
+              ? `Saldo em aberto após esta baixa: ${formatCurrency(remainingCents)}.`
+              : "Com este pagamento, não há saldo pendente nesta cobrança.",
+          ].join("\n\n");
+
+          try {
+            await sendChargeEmail({
+              to: studentEmail,
+              studentName,
+              amountCents,
+              dueDate: selectedSettlementInvoice.dueDate,
+              subject: `Confirmação de baixa - ${studentName}`,
+              customMessage: confirmationMessage,
+              includePix: false,
+              notifyOnSuccess: false,
+            });
+            postSettlementMessage =
+              `Baixa registrada com sucesso e e-mail de confirmação enviado para ${studentName}.`;
+          } catch (emailError) {
+            const emailMessage =
+              emailError instanceof Error ? emailError.message : "falha ao enviar confirmação por e-mail";
+            postSettlementMessage =
+              `Baixa registrada com sucesso, mas o e-mail de confirmação não foi enviado (${emailMessage}).`;
+          }
+        }
+      }
+
       setSettlementNotes("");
       setReceiptDataUrl("");
       setReceiptFileName("");
-      setSuccessMessage("Baixa registrada com sucesso.");
+      setSuccessMessage(postSettlementMessage);
       await Promise.all([loadOpenInvoices(), loadMonthlyReport(), loadCollectionOperations()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível registrar a baixa.";
@@ -2823,7 +2883,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
                   onChange={(event) => setWhatsappTemplate(event.target.value)}
                   rows={3}
                   className="field glow-focus w-full rounded-md px-3 py-2 text-xs outline-none"
-                  placeholder="Ola {{student_name}}, sua mensalidade de {{amount}} vence em {{due_date}}."
+                  placeholder="Olá {{student_name}}, sua mensalidade de {{amount}} vence em {{due_date}}."
                 />
                 <p className="mt-1 text-[11px] text-zinc-500">
                   Variáveis: {"{{student_name}}"}, {"{{amount}}"}, {"{{due_date}}"},{" "}

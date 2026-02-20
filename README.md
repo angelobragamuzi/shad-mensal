@@ -9,6 +9,7 @@ Frontend SaaS do Shad Manager em `Next.js + Tailwind`, integrado com Supabase Au
 - Para operaÃ§Ã£o completa de cobranÃ§a, aplicar tambÃ©m `supabase/migrations/202602190001_shad-manager_cobranca-completa.sql`
 - Para automaÃ§Ã£o de e-mails, aplicar tambÃ©m `supabase/migrations/202602190003_shad-manager_email-automation-log.sql`
 - Para opcao PIX salva e vinculo dinamico com e-mail, aplicar tambem `supabase/migrations/202602200001_shad-manager_pix-payment-option.sql`
+- Para modulo Meu Negocio, aplicar tambem `supabase/migrations/202602200002_shad-manager_meu-negocio.sql`
 - Usuario criado em `Authentication > Users`
 
 ## Variaveis de ambiente
@@ -83,6 +84,7 @@ Abra `http://localhost:3000`.
    - atualizar cobranÃ§as vencidas
    - disparar follow-up via WhatsApp com histÃ³rico em `collection_events`
 7. Tela `/pix` dedicada para geração de QR Code PIX, salvamento de opção de pagamento e vínculo automático com e-mail de cobrança.
+8. Tela `/negocios` para criar multiplos negocios e vincular clientes como funcionarios de cada negocio.
 
 ## Observacoes
 

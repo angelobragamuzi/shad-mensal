@@ -132,7 +132,7 @@ function getDueStatusLabel(dueDate: Date): string {
   const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) {
     const days = Math.abs(diffDays);
-    return `Atrasada ha ${days} dia${days === 1 ? "" : "s"}`;
+    return `Atrasada há ${days} dia${days === 1 ? "" : "s"}`;
   }
   if (diffDays === 0) {
     return "Vence hoje";
@@ -161,12 +161,12 @@ export function buildBillingEmailPayload(
 
   const subject =
     input.subject?.trim() ||
-    (dueDateLabel ? `Lembrete de cobranca - vencimento ${dueDateLabel}` : `Lembrete de cobranca para ${studentName}`);
+    (dueDateLabel ? `Lembrete de cobrança - vencimento ${dueDateLabel}` : `Lembrete de cobrança para ${studentName}`);
 
   const fallbackMessage = [
-    hasAmount ? `Identificamos um valor em aberto de ${amountLabel} para ${studentName}.` : "Identificamos uma cobranca em aberto.",
+    hasAmount ? `Identificamos um valor em aberto de ${amountLabel} para ${studentName}.` : "Identificamos uma cobrança em aberto.",
     dueDateLabel ? `Vencimento: ${dueDateLabel}.` : "",
-    "Se voce ja realizou o pagamento, desconsidere este e-mail.",
+    "Se você já realizou o pagamento, desconsidere este e-mail.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -179,8 +179,8 @@ export function buildBillingEmailPayload(
       .filter(Boolean)
   );
 
-  const amountSummary = amountLabel ?? "Nao informado";
-  const dueSummary = dueDateLabel ?? "Nao informado";
+  const amountSummary = amountLabel ?? "Não informado";
+  const dueSummary = dueDateLabel ?? "Não informado";
   const dueStatusSummary = dueStatusLabel ?? "Sem data de vencimento";
   const dueBadgeBg = dueStatusLabel?.startsWith("Atrasada")
     ? "#fee2e2"
@@ -225,10 +225,10 @@ export function buildBillingEmailPayload(
         <a href="${escapeHtml(
           pixCopyUrl
         )}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: ${accentColor}; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 14px; border-radius: 8px;">
-          Copiar codigo PIX
+          Copiar código PIX
         </a>
         <p style="margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: #475569;">
-          O botao abre uma pagina para copiar o codigo automaticamente.
+          O botão abre uma página para copiar o código automaticamente.
         </p>
       </div>`
     : "";
@@ -239,13 +239,13 @@ export function buildBillingEmailPayload(
           Pagamento via PIX
         </p>
         <p style="margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: #334155;">
-          Utilize o QR Code ou o codigo copia e cola abaixo para concluir o pagamento.
+          Utilize o QR Code ou o código copia e cola abaixo para concluir o pagamento.
         </p>
         ${pixImageBlock}
         ${pixCopyButtonBlock}
         ${
           pixPayload
-            ? `<p style="margin: 0 0 8px; font-size: 13px; color: #334155; font-weight: 700;">PIX copia e cola</p>
+            ? `<p style="margin: 0 0 8px; font-size: 13px; color: #334155; font-weight: 700;">PIX cópia e cola</p>
         <pre style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; color: #0f172a;">${escapeHtml(
           pixPayload
         )}</pre>`
@@ -272,7 +272,7 @@ export function buildBillingEmailPayload(
                       )}</p>
                     </td>
                     <td align="right" style="vertical-align: top;">
-                      <p style="margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #cbd5e1;">Aviso de cobranca</p>
+                      <p style="margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #cbd5e1;">Aviso de cobrança</p>
                       <p style="margin: 6px 0 0; font-size: 13px; font-weight: 600; color: #ffffff;">${escapeHtml(
                         noticeNumber
                       )}</p>
@@ -287,7 +287,7 @@ export function buildBillingEmailPayload(
             <tr>
               <td style="padding: 22px;">
                 <p style="margin: 0 0 14px; font-size: 13px; line-height: 1.7; color: #334155;">
-                  Este e-mail formaliza uma cobranca pendente em nome de <strong>${escapeHtml(
+                  Este e-mail formaliza uma cobrança pendente em nome de <strong>${escapeHtml(
                     studentName
                   )}</strong>.
                 </p>
@@ -328,7 +328,7 @@ export function buildBillingEmailPayload(
                   <tr>
                     <td style="padding-top: 14px; border-top: 1px solid #e5e7eb;">
                       <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #475569;">
-                        Caso o pagamento ja tenha sido realizado, desconsidere este aviso.
+                        Caso o pagamento já tenha sido realizado, desconsidere este aviso.
                       </p>
                       <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: #475569;">
                         Para suporte, responda este e-mail diretamente.
@@ -351,7 +351,7 @@ export function buildBillingEmailPayload(
   const plainMessage = messageParagraphs.join("\n\n").trim();
 
   const textLines = [
-    `${organizationName} - Aviso de cobranca`,
+    `${organizationName} - Aviso de cobrança`,
     `Emitido em: ${todayLabel}`,
     "",
     `Cliente: ${studentName}`,
@@ -363,7 +363,7 @@ export function buildBillingEmailPayload(
     textLines.push("", plainMessage);
   }
   if (pixPayload) {
-    textLines.push("", "PIX copia e cola:", pixPayload);
+    textLines.push("", "PIX cópia e cola:", pixPayload);
     if (pixCopyUrl) {
       textLines.push("Link para copiar: " + pixCopyUrl);
     }
@@ -438,7 +438,7 @@ async function sendWithSmtp(args: {
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
   if (!smtpUser || !smtpPass) {
-    throw new Error("SMTP_USER e SMTP_PASS sao obrigatorios para envio SMTP.");
+    throw new Error("SMTP_USER e SMTP_PASS são obrigatórios para envio SMTP.");
   }
 
   const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";

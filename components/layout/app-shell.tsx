@@ -81,6 +81,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/clientes", icon: UsersRound },
+  { label: "Meu Negócio", href: "/negocios", icon: UsersRound },
   { label: "PIX", href: "/pix", icon: QrCode },
   { label: "Cobranças", href: "/cobrancas", icon: Wallet },
   { label: "Baixas", href: "/baixas", icon: HandCoins },

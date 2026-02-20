@@ -16,6 +16,7 @@ export const runtime = "nodejs";
 interface SendChargeEmailBody extends BillingEmailInput {
   organizationId: string;
   to: string;
+  includePix?: boolean | null;
 }
 
 function jsonError(message: string, status = 400) {
@@ -164,25 +165,29 @@ export async function POST(request: Request) {
 
   try {
     const amountCents = parsePositiveCents(body.amountCents);
-    const pixOption = parsePixPaymentOption(organizationSettingsRow);
-
-    let pixPayload = body.pixPayload?.trim() || null;
+    const includePix = body.includePix !== false;
+    let pixPayload: string | null = null;
     let pixQrCodeDataUrl: string | null = null;
 
-    if (!pixPayload && pixOption) {
-      if (amountCents) {
-        pixPayload = buildPixPayloadFromOption(pixOption, amountCents);
+    if (includePix) {
+      const pixOption = parsePixPaymentOption(organizationSettingsRow);
+      pixPayload = body.pixPayload?.trim() || null;
+
+      if (!pixPayload && pixOption) {
+        if (amountCents) {
+          pixPayload = buildPixPayloadFromOption(pixOption, amountCents);
+          pixQrCodeDataUrl = await buildPixQrCodeDataUrl(pixPayload);
+        } else {
+          pixPayload = buildPixPayloadFromOption(pixOption);
+          pixQrCodeDataUrl = pixOption.savedQrCodeDataUrl;
+        }
+      }
+
+      if (pixPayload && !pixQrCodeDataUrl) {
         pixQrCodeDataUrl = await buildPixQrCodeDataUrl(pixPayload);
-      } else {
-        pixPayload = buildPixPayloadFromOption(pixOption);
-        pixQrCodeDataUrl = pixOption.savedQrCodeDataUrl;
       }
     }
-
-    if (pixPayload && !pixQrCodeDataUrl) {
-      pixQrCodeDataUrl = await buildPixQrCodeDataUrl(pixPayload);
-    }
-    const pixCopyUrl = pixPayload ? buildPixCopyUrl(pixPayload) : null;
+    const pixCopyUrl = includePix && pixPayload ? buildPixCopyUrl(pixPayload) : null;
 
     const emailPayload = buildBillingEmailPayload(
       {
