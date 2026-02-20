@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cobranca/email/auto",
-      "schedule": "0 11 * * *"
+      "schedule": "35 11 * * *"
     }
   ]
 }

@@ -118,13 +118,11 @@ function buildNotificationPlan(dueDate: string, today: Date): {
 
   if (daysUntilDue <= -1) {
     const daysOverdue = Math.abs(daysUntilDue);
-    if ((daysOverdue - 1) % 2 === 0) {
-      return {
-        notificationKind: "overdue_followup",
-        notificationKey: `overdue_followup:${dueDate}:d${daysOverdue}`,
-        daysOffset,
-      };
-    }
+    return {
+      notificationKind: "overdue_followup",
+      notificationKey: `overdue_followup:${dueDate}:d${daysOverdue}`,
+      daysOffset,
+    };
   }
 
   return null;

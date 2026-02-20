@@ -45,7 +45,7 @@ A rota `GET/POST /api/cobranca/email/auto` executa envio automático com as regr
 
 - 3 dias antes do vencimento
 - no dia do vencimento
-- após o vencimento: 1 dia e depois a cada 2 dias (1, 3, 5, ...)
+- após o vencimento: diariamente (1, 2, 3, ...)
 
 Essa rota exige `Authorization: Bearer <CRON_SECRET>` (ou header `x-cron-secret`) e grava log em `invoice_email_dispatch_logs` para evitar reenvio duplicado de notificações já enviadas com sucesso.
 
@@ -57,7 +57,7 @@ curl -X POST \
   http://localhost:3000/api/cobranca/email/auto
 ```
 
-Se estiver em Vercel, `vercel.json` já agenda execução diária (`0 11 * * *` UTC).
+Se estiver em Vercel, `vercel.json` já agenda execução diária às `11:35 UTC` (`35 11 * * *`), equivalente a `08:35` no horário de Brasília (UTC-3).
 
 ## Rodar local
 
