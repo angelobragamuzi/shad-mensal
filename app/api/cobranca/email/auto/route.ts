@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildBillingEmailPayload, dispatchBillingEmail } from "@/lib/shad-manager/billing-email-server";
+import {
+  buildPixPayloadFromOption,
+  buildPixQrCodeDataUrl,
+  parsePixPaymentOption,
+} from "@/lib/shad-manager/pix-payment-option";
 
 export const runtime = "nodejs";
 
@@ -51,6 +56,37 @@ function dateDiffInDays(from: Date, to: Date): number {
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeBaseUrl(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized.replace(/\/+$/, "");
+  }
+
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/.*)?$/i.test(normalized)) {
+    return `https://${normalized}`.replace(/\/+$/, "");
+  }
+
+  return null;
+}
+
+function resolvePublicAppUrl(): string | null {
+  const explicitUrl =
+    process.env.BILLING_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  const normalizedExplicit = normalizeBaseUrl(explicitUrl);
+  if (normalizedExplicit) return normalizedExplicit;
+
+  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  return normalizeBaseUrl(vercelUrl);
+}
+
+function buildPixCopyUrl(pixPayload: string): string | null {
+  const appUrl = resolvePublicAppUrl();
+  if (!appUrl) return null;
+  return `${appUrl}/pix/copiar?code=${encodeURIComponent(pixPayload)}`;
 }
 
 function buildNotificationPlan(dueDate: string, today: Date): {
@@ -258,18 +294,37 @@ async function runAutomation(request: Request) {
     return jsonError(organizationsError.message, 500);
   }
 
-  const { data: organizationSettings, error: settingsError } = await supabase
+  const settingsColumns =
+    "organization_id, site_accent_color, pix_payment_enabled, pix_key, pix_merchant_name, pix_merchant_city, pix_description, pix_txid, pix_saved_payload, pix_saved_qr_image_data_url";
+  let organizationSettings: Array<Record<string, unknown>> | null = null;
+
+  const primarySettingsResponse = await supabase
     .from("organization_settings")
-    .select("organization_id, site_accent_color")
+    .select(settingsColumns)
     .in("organization_id", orgIds);
 
-  if (settingsError) {
-    const normalized = settingsError.message.toLowerCase();
-    const missingAccentColumn =
-      normalized.includes("site_accent_color") && normalized.includes("does not exist");
-    if (!missingAccentColumn) {
-      return jsonError(settingsError.message, 500);
+  if (primarySettingsResponse.error) {
+    const normalized = primarySettingsResponse.error.message.toLowerCase();
+    const missingPixColumns = normalized.includes("pix_") && normalized.includes("does not exist");
+    if (missingPixColumns) {
+      const fallbackSettingsResponse = await supabase
+        .from("organization_settings")
+        .select("organization_id, site_accent_color")
+        .in("organization_id", orgIds);
+
+      if (fallbackSettingsResponse.error) {
+        return jsonError(fallbackSettingsResponse.error.message, 500);
+      }
+      organizationSettings = (fallbackSettingsResponse.data ?? []) as Array<Record<string, unknown>>;
+    } else {
+      const missingAccentColumn =
+        normalized.includes("site_accent_color") && normalized.includes("does not exist");
+      if (!missingAccentColumn) {
+        return jsonError(primarySettingsResponse.error.message, 500);
+      }
     }
+  } else {
+    organizationSettings = (primarySettingsResponse.data ?? []) as Array<Record<string, unknown>>;
   }
 
   const organizationNameById = new Map<string, string>();
@@ -280,10 +335,13 @@ async function runAutomation(request: Request) {
   }
 
   const organizationAccentById = new Map<string, string>();
+  const pixOptionByOrganizationId = new Map<string, ReturnType<typeof parsePixPaymentOption>>();
   for (const row of organizationSettings ?? []) {
-    if (typeof row.organization_id === "string" && typeof row.site_accent_color === "string") {
+    if (typeof row.organization_id !== "string") continue;
+    if (typeof row.site_accent_color === "string") {
       organizationAccentById.set(row.organization_id, row.site_accent_color);
     }
+    pixOptionByOrganizationId.set(row.organization_id, parsePixPaymentOption(row));
   }
 
   let sentCount = 0;
@@ -294,21 +352,34 @@ async function runAutomation(request: Request) {
     const accentColor = organizationAccentById.get(target.organizationId) ?? null;
     const automationContent = buildAutomationMessage(target);
 
-    const emailPayload = buildBillingEmailPayload(
-      {
-        studentName: target.studentName,
-        amountCents: target.openCents,
-        dueDate: target.dueDate,
-        subject: automationContent.subject,
-        customMessage: automationContent.message,
-      },
-      {
-        organizationName,
-        accentColor,
-      }
-    );
-
     try {
+      let pixPayload: string | null = null;
+      let pixQrCodeDataUrl: string | null = null;
+
+      const pixOption = pixOptionByOrganizationId.get(target.organizationId) ?? null;
+      if (pixOption) {
+        pixPayload = buildPixPayloadFromOption(pixOption, target.openCents);
+        pixQrCodeDataUrl = await buildPixQrCodeDataUrl(pixPayload);
+      }
+      const pixCopyUrl = pixPayload ? buildPixCopyUrl(pixPayload) : null;
+
+      const emailPayload = buildBillingEmailPayload(
+        {
+          studentName: target.studentName,
+          amountCents: target.openCents,
+          dueDate: target.dueDate,
+          subject: automationContent.subject,
+          customMessage: automationContent.message,
+          pixPayload,
+          pixQrCodeDataUrl,
+          pixCopyUrl,
+        },
+        {
+          organizationName,
+          accentColor,
+        }
+      );
+
       const dispatchResult = await dispatchBillingEmail({
         from: billingEmailFrom,
         to: target.recipientEmail,

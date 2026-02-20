@@ -36,6 +36,14 @@ interface TemplateSettingsRow {
   organization_id: string;
   qr_template_logo_url: string | null;
   whatsapp_template: string | null;
+  pix_payment_enabled?: boolean | null;
+  pix_key?: string | null;
+  pix_merchant_name?: string | null;
+  pix_merchant_city?: string | null;
+  pix_description?: string | null;
+  pix_txid?: string | null;
+  pix_saved_payload?: string | null;
+  pix_saved_qr_image_data_url?: string | null;
 }
 
 type PaymentMethod = "pix" | "cash" | "card" | "transfer" | "other";
@@ -518,7 +526,12 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
   const [whatsappTemplate, setWhatsappTemplate] = useState(DEFAULT_WHATSAPP_TEMPLATE);
   const [isLoadingTemplateSettings, setIsLoadingTemplateSettings] = useState(true);
   const [isSavingTemplateSettings, setIsSavingTemplateSettings] = useState(false);
+  const [isSavingPixOption, setIsSavingPixOption] = useState(false);
   const [isLogoColumnAvailable, setIsLogoColumnAvailable] = useState(true);
+  const [isPixOptionColumnAvailable, setIsPixOptionColumnAvailable] = useState(true);
+  const [hasSavedPixPaymentOption, setHasSavedPixPaymentOption] = useState(false);
+  const [savedPixPayload, setSavedPixPayload] = useState("");
+  const [savedPixQrCodeDataUrl, setSavedPixQrCodeDataUrl] = useState("");
   const [templatePreviewUrl, setTemplatePreviewUrl] = useState<string | null>(null);
   const [isBuildingTemplatePreview, setIsBuildingTemplatePreview] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -618,6 +631,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       overdueCents,
     };
   }, [monthlyReport]);
+  const shouldUseSavedPixOptionForEmail = hasSavedPixPaymentOption && isPixOptionColumnAvailable;
   const todayIsoDate = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -1150,8 +1164,9 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         setUserId(context.user.id);
 
         let hasQrLogoColumn = showPix;
+        let hasPixOptionColumns = showPix;
         const primaryColumns = showPix
-          ? "organization_id, qr_template_logo_url, whatsapp_template"
+          ? "organization_id, qr_template_logo_url, whatsapp_template, pix_payment_enabled, pix_key, pix_merchant_name, pix_merchant_city, pix_description, pix_txid, pix_saved_payload, pix_saved_qr_image_data_url"
           : "organization_id, whatsapp_template";
 
         const primaryResponse = await supabase
@@ -1166,12 +1181,23 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
           const missingLogoColumn =
             normalizedMessage.includes("qr_template_logo_url") &&
             normalizedMessage.includes("does not exist");
+          const missingPixColumns =
+            normalizedMessage.includes("pix_") && normalizedMessage.includes("does not exist");
 
-          if (missingLogoColumn && showPix) {
-            hasQrLogoColumn = false;
+          if ((missingLogoColumn || missingPixColumns) && showPix) {
+            if (missingLogoColumn) hasQrLogoColumn = false;
+            if (missingPixColumns) hasPixOptionColumns = false;
+
+            const fallbackColumns = hasQrLogoColumn
+              ? hasPixOptionColumns
+                ? "organization_id, qr_template_logo_url, whatsapp_template, pix_payment_enabled, pix_key, pix_merchant_name, pix_merchant_city, pix_description, pix_txid, pix_saved_payload, pix_saved_qr_image_data_url"
+                : "organization_id, qr_template_logo_url, whatsapp_template"
+              : hasPixOptionColumns
+                ? "organization_id, whatsapp_template, pix_payment_enabled, pix_key, pix_merchant_name, pix_merchant_city, pix_description, pix_txid, pix_saved_payload, pix_saved_qr_image_data_url"
+                : "organization_id, whatsapp_template";
             const fallbackResponse = await supabase
               .from("organization_settings")
-              .select("organization_id, whatsapp_template")
+              .select(fallbackColumns)
               .eq("organization_id", context.organizationId)
               .maybeSingle();
             if (fallbackResponse.error) {
@@ -1188,15 +1214,48 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         if (isCancelled) return;
 
         setIsLogoColumnAvailable(hasQrLogoColumn);
-        if (!hasQrLogoColumn && showPix) {
-          setErrorMessage(
-            "A coluna qr_template_logo_url ainda não existe no banco. Rode a migration 202602140001 para habilitar o salvamento do logo."
-          );
-        }
+        setIsPixOptionColumnAvailable(hasPixOptionColumns);
 
         const row = settingsData as Partial<TemplateSettingsRow> | null;
         setTemplateLogoUrl(hasQrLogoColumn ? String(row?.qr_template_logo_url ?? "").trim() : "");
         setWhatsappTemplate(String(row?.whatsapp_template ?? "").trim() || DEFAULT_WHATSAPP_TEMPLATE);
+
+        if (showPix && hasPixOptionColumns) {
+          const savedKey = String(row?.pix_key ?? "").trim();
+          const savedPaymentEnabled = Boolean(row?.pix_payment_enabled) && Boolean(savedKey);
+          setHasSavedPixPaymentOption(savedPaymentEnabled);
+          setSavedPixPayload(String(row?.pix_saved_payload ?? "").trim());
+          setSavedPixQrCodeDataUrl(String(row?.pix_saved_qr_image_data_url ?? "").trim());
+
+          if (savedPaymentEnabled) {
+            setPixKey(savedKey);
+            setMerchantName(String(row?.pix_merchant_name ?? "").trim() || "Shad Manager");
+            setMerchantCity(String(row?.pix_merchant_city ?? "").trim() || "São Paulo");
+            setDescription(String(row?.pix_description ?? "").trim());
+            setTxid(String(row?.pix_txid ?? "").trim() || "SHADMENSAL");
+          }
+        } else if (showPix) {
+          setHasSavedPixPaymentOption(false);
+          setSavedPixPayload("");
+          setSavedPixQrCodeDataUrl("");
+        }
+
+        if (showPix) {
+          const warningMessages: string[] = [];
+          if (!hasQrLogoColumn) {
+            warningMessages.push(
+              "A coluna qr_template_logo_url ainda não existe no banco. Rode a migration 202602140001 para habilitar o salvamento do logo."
+            );
+          }
+          if (!hasPixOptionColumns) {
+            warningMessages.push(
+              "As colunas de opção PIX ainda não existem no banco. Rode a migration 202602200001 para habilitar o vínculo dinâmico com e-mail."
+            );
+          }
+          if (warningMessages.length > 0) {
+            setErrorMessage(warningMessages.join(" "));
+          }
+        }
       } catch (error) {
         if (isCancelled) return;
         const message =
@@ -1431,14 +1490,15 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
     setIsSendingPixEmail(true);
     try {
       const amountCents = parseAmountToCents(amount);
-      const effectivePixPayload =
+      const fallbackPixPayload =
         pixPayload || (pixKey.trim() ? `Chave PIX para pagamento: ${pixKey.trim()}` : null);
+      const hasPixDataForEmail = shouldUseSavedPixOptionForEmail || Boolean(fallbackPixPayload);
       const message = [
         `Olá ${selectedClient.name},`,
         amountCents
           ? `Sua cobrança está em aberto no valor de ${formatCurrency(amountCents)}.`
           : "Sua cobrança está disponível para pagamento.",
-        effectivePixPayload
+        hasPixDataForEmail
           ? "Abaixo você encontra os dados de pagamento via PIX."
           : "Entre em contato para receber os dados de pagamento.",
       ].join("\n\n");
@@ -1449,7 +1509,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         amountCents: amountCents ?? null,
         subject: `Cobrança via PIX - ${merchantName || "Financeiro"}`,
         customMessage: message,
-        pixPayload: effectivePixPayload,
+        pixPayload: shouldUseSavedPixOptionForEmail ? null : fallbackPixPayload,
       });
 
       setSuccessMessage(`E-mail de cobrança enviado para ${selectedClient.name}.`);
@@ -1501,7 +1561,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
         dueDate: item.dueDate,
         daysOverdue,
       });
-      const effectivePixPayload =
+      const fallbackPixPayload =
         pixPayload || (pixKey.trim() ? `Chave PIX para pagamento: ${pixKey.trim()}` : null);
 
       await sendChargeEmail({
@@ -1514,7 +1574,7 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
             ? `Cobrança em atraso - ${item.studentName}`
             : `Lembrete de vencimento - ${item.studentName}`,
         customMessage: message,
-        pixPayload: effectivePixPayload,
+        pixPayload: shouldUseSavedPixOptionForEmail ? null : fallbackPixPayload,
       });
 
       await logCollectionAction({
@@ -1740,6 +1800,85 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
       setErrorMessage(message);
     } finally {
       setIsSavingTemplateSettings(false);
+    }
+  };
+
+  const handleSavePixPaymentOption = async () => {
+    resetFeedback();
+    if (!organizationId) {
+      setErrorMessage("Configuração da organização não encontrada.");
+      return;
+    }
+    if (!isPixOptionColumnAvailable) {
+      setErrorMessage(
+        "As colunas de opção PIX ainda não existem no banco. Rode a migration 202602200001 para habilitar esse recurso."
+      );
+      return;
+    }
+    if (!pixKey.trim()) {
+      setErrorMessage("Informe uma chave PIX para salvar a opção de pagamento.");
+      return;
+    }
+    if (payloadError || !pixPayload) {
+      setErrorMessage(payloadError ?? "Não foi possível gerar o código PIX para salvar.");
+      return;
+    }
+    setIsSavingPixOption(true);
+    try {
+      const payloadToSave = buildPixPayload({
+        key: pixKey,
+        merchantName,
+        merchantCity,
+        txid,
+        description,
+      });
+      const QRCode = (await import("qrcode")).default;
+      const qrCodeDataUrlToSave = await QRCode.toDataURL(payloadToSave, {
+        width: 512,
+        margin: 2,
+        errorCorrectionLevel: "M",
+        color: {
+          dark: "#111111",
+          light: "#FFFFFF",
+        },
+      });
+
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase
+        .from("organization_settings")
+        .update({
+          pix_payment_enabled: true,
+          pix_key: pixKey.trim(),
+          pix_merchant_name: merchantName.trim() || "Shad Manager",
+          pix_merchant_city: merchantCity.trim() || "São Paulo",
+          pix_description: description.trim(),
+          pix_txid: txid.trim() || "SHADMENSAL",
+          pix_saved_payload: payloadToSave,
+          pix_saved_qr_image_data_url: qrCodeDataUrlToSave,
+        })
+        .eq("organization_id", organizationId);
+
+      if (error) {
+        const normalized = error.message.toLowerCase();
+        const missingPixColumns = normalized.includes("pix_") && normalized.includes("does not exist");
+        if (missingPixColumns) {
+          setIsPixOptionColumnAvailable(false);
+          throw new Error(
+            "As colunas de opção PIX ainda não existem. Rode a migration 202602200001_shad-manager_pix-payment-option.sql."
+          );
+        }
+        throw new Error(error.message);
+      }
+
+      setHasSavedPixPaymentOption(true);
+      setSavedPixPayload(payloadToSave);
+      setSavedPixQrCodeDataUrl(qrCodeDataUrlToSave);
+      setSuccessMessage("Opção de pagamento PIX salva e vinculada aos e-mails de cobrança.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível salvar a opção de pagamento PIX.";
+      setErrorMessage(message);
+    } finally {
+      setIsSavingPixOption(false);
     }
   };
 
@@ -2589,6 +2728,69 @@ export function CobrancasView({ mode = "pix" }: CobrancasViewProps) {
                 placeholder="Pagamento da mensalidade"
               />
             </label>
+
+            <div className="surface-soft md:col-span-2 rounded-md p-3 sm:p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-zinc-100">Opção de pagamento PIX</p>
+                  <p className="text-xs text-zinc-500">
+                    Salve chave + QR para vincular automaticamente no e-mail e gerar valor específico por cobrança.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSavePixPaymentOption()}
+                  disabled={
+                    isSavingPixOption ||
+                    isLoadingTemplateSettings ||
+                    !isPixOptionColumnAvailable ||
+                    Boolean(payloadError) ||
+                    !pixPayload
+                  }
+                  className="btn-primary inline-flex h-9 w-full items-center justify-center rounded-md px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                >
+                  {isSavingPixOption ? "Salvando..." : "Salvar opção de pagamento"}
+                </button>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                {!isPixOptionColumnAvailable ? (
+                  <p className="text-xs text-amber-300">
+                    Migration pendente para opção PIX: execute a
+                    `202602200001_shad-manager_pix-payment-option.sql`.
+                  </p>
+                ) : null}
+                {hasSavedPixPaymentOption ? (
+                  <p className="text-xs text-emerald-300">
+                    Opção PIX salva e ativa para os e-mails de cobrança.
+                  </p>
+                ) : null}
+                {!hasSavedPixPaymentOption && isPixOptionColumnAvailable ? (
+                  <p className="text-xs text-zinc-500">
+                    Após salvar, os e-mails passam a usar o PIX da organização automaticamente.
+                  </p>
+                ) : null}
+                {hasSavedPixPaymentOption && savedPixPayload ? (
+                  <p className="text-xs text-zinc-400">
+                    Código PIX salvo ({savedPixPayload.length} caracteres) para fallback sem valor.
+                  </p>
+                ) : null}
+              </div>
+
+              {hasSavedPixPaymentOption && savedPixQrCodeDataUrl ? (
+                <div className="mt-3 rounded-md border border-white/10 p-3">
+                  <p className="mb-2 text-xs text-zinc-500">Último QR salvo</p>
+                  <Image
+                    src={savedPixQrCodeDataUrl}
+                    alt="QR Code PIX salvo"
+                    width={120}
+                    height={120}
+                    unoptimized
+                    className="h-auto w-[120px] rounded-md border border-white/10"
+                  />
+                </div>
+              ) : null}
+            </div>
 
             <div className="surface-soft md:col-span-2 rounded-md p-3 sm:p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

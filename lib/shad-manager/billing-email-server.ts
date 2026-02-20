@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+﻿import nodemailer from "nodemailer";
 
 export interface BillingEmailInput {
   studentName?: string | null;
@@ -7,6 +7,8 @@ export interface BillingEmailInput {
   subject?: string | null;
   customMessage?: string | null;
   pixPayload?: string | null;
+  pixQrCodeDataUrl?: string | null;
+  pixCopyUrl?: string | null;
 }
 
 export interface BillingEmailBrandingContext {
@@ -18,6 +20,20 @@ export interface BuiltBillingEmailPayload {
   subject: string;
   html: string;
   text: string;
+  attachments: BillingEmailAttachment[];
+}
+
+export interface BillingEmailAttachment {
+  filename: string;
+  contentType: string;
+  contentBase64: string;
+  cid?: string;
+}
+
+interface ParsedInlineImage {
+  mimeType: string;
+  base64Content: string;
+  fileExtension: string;
 }
 
 function escapeHtml(value: string): string {
@@ -27,6 +43,47 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function normalizePixQrCodeDataUrl(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  return /^data:image\/(?:png|jpeg|jpg|webp|gif|svg\+xml);base64,/i.test(normalized)
+    ? normalized
+    : null;
+}
+
+function parsePixQrCodeDataUrl(value: string | null | undefined): ParsedInlineImage | null {
+  const normalized = normalizePixQrCodeDataUrl(value);
+  if (!normalized) return null;
+
+  const match = normalized.match(
+    /^data:(image\/(?:png|jpeg|jpg|webp|gif|svg\+xml));base64,([a-z0-9+/=\r\n]+)$/i
+  );
+  if (!match) return null;
+
+  const mimeType = match[1].toLowerCase();
+  const base64Content = match[2].replace(/\s+/g, "");
+  if (!base64Content) return null;
+
+  const fileExtension =
+    mimeType === "image/jpeg" || mimeType === "image/jpg"
+      ? "jpg"
+      : mimeType === "image/svg+xml"
+        ? "svg"
+        : mimeType.split("/")[1] ?? "png";
+
+  return {
+    mimeType,
+    base64Content,
+    fileExtension,
+  };
+}
+
+function normalizePixCopyUrl(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  return /^https?:\/\/[^\s]+$/i.test(normalized) ? normalized : null;
 }
 
 function formatCurrency(valueCents: number): string {
@@ -46,17 +103,15 @@ function normalizeHexColor(value: string | null | undefined, fallback = "#f07f1d
   return /^#[0-9a-f]{6}$/i.test(normalized) ? normalized : fallback;
 }
 
-function hexToRgba(hexColor: string, alpha: number): string {
-  const safeHex = normalizeHexColor(hexColor).slice(1);
-  const r = Number.parseInt(safeHex.slice(0, 2), 16);
-  const g = Number.parseInt(safeHex.slice(2, 4), 16);
-  const b = Number.parseInt(safeHex.slice(4, 6), 16);
-  const safeAlpha = Math.max(0, Math.min(1, alpha));
-  return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
-}
-
 function removeGreetingParagraphs(paragraphs: string[]): string[] {
-  return paragraphs.filter((paragraph) => !/^ol[áa]\b[\s\S]*$/i.test(paragraph.trim()));
+  return paragraphs.filter((paragraph) => {
+    const normalized = paragraph
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    return !/^ola\b/.test(normalized);
+  });
 }
 
 function parseIsoDate(isoDate: string): Date | null {
@@ -77,7 +132,7 @@ function getDueStatusLabel(dueDate: Date): string {
   const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) {
     const days = Math.abs(diffDays);
-    return `Atrasada há ${days} dia${days === 1 ? "" : "s"}`;
+    return `Atrasada ha ${days} dia${days === 1 ? "" : "s"}`;
   }
   if (diffDays === 0) {
     return "Vence hoje";
@@ -92,8 +147,6 @@ export function buildBillingEmailPayload(
   const studentName = input.studentName?.trim() || "cliente";
   const organizationName = branding.organizationName.trim() || "ShadManager";
   const accentColor = normalizeHexColor(branding.accentColor);
-  const accentSoft = hexToRgba(accentColor, 0.1);
-  const accentMid = hexToRgba(accentColor, 0.22);
   const todayLabel = formatDate(new Date());
 
   const hasAmount = Number.isFinite(input.amountCents) && Number(input.amountCents) > 0;
@@ -102,15 +155,18 @@ export function buildBillingEmailPayload(
   const dueDateLabel = dueDate ? formatDate(dueDate) : null;
   const dueStatusLabel = dueDate ? getDueStatusLabel(dueDate) : null;
   const pixPayload = input.pixPayload?.trim() || null;
+  const pixQrCodeImage = parsePixQrCodeDataUrl(input.pixQrCodeDataUrl);
+  const pixCopyUrl = normalizePixCopyUrl(input.pixCopyUrl);
+  const pixQrCodeCid = pixQrCodeImage ? "pix-qrcode-inline" : null;
 
   const subject =
     input.subject?.trim() ||
-    (dueDateLabel ? `Lembrete de cobrança - vencimento ${dueDateLabel}` : `Lembrete de cobrança para ${studentName}`);
+    (dueDateLabel ? `Lembrete de cobranca - vencimento ${dueDateLabel}` : `Lembrete de cobranca para ${studentName}`);
 
   const fallbackMessage = [
-    hasAmount ? `Identificamos um valor em aberto de ${amountLabel} para ${studentName}.` : "Identificamos uma cobrança em aberto.",
+    hasAmount ? `Identificamos um valor em aberto de ${amountLabel} para ${studentName}.` : "Identificamos uma cobranca em aberto.",
     dueDateLabel ? `Vencimento: ${dueDateLabel}.` : "",
-    "Se você já realizou o pagamento, desconsidere este e-mail.",
+    "Se voce ja realizou o pagamento, desconsidere este e-mail.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -123,8 +179,8 @@ export function buildBillingEmailPayload(
       .filter(Boolean)
   );
 
-  const amountSummary = amountLabel ?? "Não informado";
-  const dueSummary = dueDateLabel ?? "Não informado";
+  const amountSummary = amountLabel ?? "Nao informado";
+  const dueSummary = dueDateLabel ?? "Nao informado";
   const dueStatusSummary = dueStatusLabel ?? "Sem data de vencimento";
   const dueBadgeBg = dueStatusLabel?.startsWith("Atrasada")
     ? "#fee2e2"
@@ -137,113 +193,152 @@ export function buildBillingEmailPayload(
       ? "#92400e"
       : "#166534";
 
+  const noticeDate = new Date();
+  const issueDateStamp = noticeDate.toISOString().slice(0, 10).replaceAll("-", "");
+  const noticeNumber = `CBR-${issueDateStamp}-${Math.floor(Math.random() * 9000 + 1000)}`;
+
   const htmlMessage = messageParagraphs
     .map(
       (paragraph) =>
-        `<p style="margin: 0 0 12px; font-size: 15px; line-height: 1.65; color: #334155;">${escapeHtml(paragraph)}</p>`
+        `<p style="margin: 0 0 10px; font-size: 14px; line-height: 1.65; color: #334155;">${escapeHtml(paragraph)}</p>`
     )
     .join("");
   const htmlMessageSection = htmlMessage
-    ? `<div style="border-top: 1px solid #e2e8f0; margin: 16px 0; padding-top: 16px;">
+    ? `<div style="margin-top: 18px; padding: 16px; border: 1px solid #d1d5db; border-left: 4px solid ${accentColor}; border-radius: 8px; background: #f8fafc;">
+         <p style="margin: 0 0 10px; font-size: 12px; letter-spacing: 0.06em; color: #475569; text-transform: uppercase; font-weight: 700;">
+           Mensagem do financeiro
+         </p>
          ${htmlMessage}
        </div>`
     : "";
 
-  const pixSection = pixPayload
-    ? `<div style="margin-top: 20px; border: 1px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; padding: 14px;">
-        <p style="margin: 0 0 8px; font-size: 13px; color: #334155; font-weight: 700;">PIX copia e cola</p>
-        <pre style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; color: #0f172a;">${escapeHtml(
-          pixPayload
-        )}</pre>
+  const pixImageBlock = pixQrCodeCid
+    ? `<div style="margin: 0 0 12px; text-align: center;">
+        <img src="cid:${escapeHtml(
+          pixQrCodeCid
+        )}" alt="QR Code PIX" width="220" height="220" style="display: inline-block; width: 220px; height: 220px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; padding: 8px;" />
       </div>`
     : "";
 
-  const statusCardBg = dueStatusLabel?.startsWith("Atrasada")
-    ? "#fef2f2"
-    : dueStatusLabel === "Vence hoje"
-      ? "#fffbeb"
-      : "#f0fdf4";
-  const statusCardBorder = dueStatusLabel?.startsWith("Atrasada")
-    ? "#fecaca"
-    : dueStatusLabel === "Vence hoje"
-      ? "#fde68a"
-      : "#bbf7d0";
+  const pixCopyButtonBlock = pixPayload && pixCopyUrl
+    ? `<div style="margin: 0 0 12px;">
+        <a href="${escapeHtml(
+          pixCopyUrl
+        )}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: ${accentColor}; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 14px; border-radius: 8px;">
+          Copiar codigo PIX
+        </a>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: #475569;">
+          O botao abre uma pagina para copiar o codigo automaticamente.
+        </p>
+      </div>`
+    : "";
+
+  const pixSection = pixPayload || pixImageBlock
+    ? `<div style="margin-top: 20px; border: 1px solid #d1d5db; border-radius: 8px; background: #f8fafc; padding: 16px;">
+        <p style="margin: 0 0 6px; font-size: 12px; letter-spacing: 0.06em; color: #475569; text-transform: uppercase; font-weight: 700;">
+          Pagamento via PIX
+        </p>
+        <p style="margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: #334155;">
+          Utilize o QR Code ou o codigo copia e cola abaixo para concluir o pagamento.
+        </p>
+        ${pixImageBlock}
+        ${pixCopyButtonBlock}
+        ${
+          pixPayload
+            ? `<p style="margin: 0 0 8px; font-size: 13px; color: #334155; font-weight: 700;">PIX copia e cola</p>
+        <pre style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; color: #0f172a;">${escapeHtml(
+          pixPayload
+        )}</pre>`
+            : ""
+        }
+      </div>`
+    : "";
 
   const html = `<!doctype html>
 <html lang="pt-BR">
-  <body style="margin: 0; padding: 20px; background: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 640px; margin: 0 auto; border-collapse: collapse;">
+  <body style="margin: 0; padding: 0; background: #e5e7eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111827;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">
       <tr>
-        <td style="background: linear-gradient(125deg, ${accentColor} 0%, #0f172a 75%); padding: 22px 24px; border-radius: 16px 16px 0 0;">
-          <p style="margin: 0; font-size: 11px; letter-spacing: 0.06em; color: #dbeafe; text-transform: uppercase; text-align: right;">Aviso financeiro</p>
-          <p style="margin: 6px 0 0; font-size: 15px; font-weight: 700; color: #ffffff; text-align: right;">${escapeHtml(
-            organizationName
-          )}</p>
-        </td>
-      </tr>
-      <tr>
-        <td style="background: #ffffff; border: 1px solid #e2e8f0; border-top: 0; border-radius: 0 0 16px 16px; padding: 24px;">
-          <div style="margin-bottom: 16px; padding: 14px 16px; border-radius: 12px; border: 1px solid ${accentMid}; background: ${accentSoft};">
-            <p style="margin: 0; font-size: 13px; color: #334155;">
-              Este é um comunicado automático do financeiro da <strong>${escapeHtml(
-                organizationName
-              )}</strong>.
-            </p>
-          </div>
-
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0 10px;">
+        <td style="padding: 24px 12px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 680px; margin: 0 auto; border-collapse: collapse; background: #ffffff; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden;">
             <tr>
-              <td style="padding: 0;">
-                <div style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px;">
-                  <p style="margin: 0 0 6px; font-size: 12px; color: #64748b;">Cliente</p>
-                  <p style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 700;">${escapeHtml(
+              <td style="background: #0f172a; padding: 18px 22px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">
+                  <tr>
+                    <td style="vertical-align: top;">
+                      <p style="margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8;">Departamento financeiro</p>
+                      <p style="margin: 6px 0 0; font-size: 17px; font-weight: 700; color: #ffffff;">${escapeHtml(
+                        organizationName
+                      )}</p>
+                    </td>
+                    <td align="right" style="vertical-align: top;">
+                      <p style="margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #cbd5e1;">Aviso de cobranca</p>
+                      <p style="margin: 6px 0 0; font-size: 13px; font-weight: 600; color: #ffffff;">${escapeHtml(
+                        noticeNumber
+                      )}</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="height: 4px; background: ${accentColor}; font-size: 0; line-height: 0;">&nbsp;</td>
+            </tr>
+            <tr>
+              <td style="padding: 22px;">
+                <p style="margin: 0 0 14px; font-size: 13px; line-height: 1.7; color: #334155;">
+                  Este e-mail formaliza uma cobranca pendente em nome de <strong>${escapeHtml(
                     studentName
-                  )}</p>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 0;">
-                <div style="border: 1px solid #fed7aa; background: #fff7ed; border-radius: 12px; padding: 12px 14px;">
-                  <p style="margin: 0 0 6px; font-size: 12px; color: #9a3412;">Valor em aberto</p>
-                  <p style="margin: 0; font-size: 26px; line-height: 1.2; color: #9a3412; font-weight: 800;">${escapeHtml(
-                    amountSummary
-                  )}</p>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 0;">
-                <div style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px;">
-                  <p style="margin: 0 0 6px; font-size: 12px; color: #64748b;">Vencimento</p>
-                  <p style="margin: 0 0 10px; font-size: 16px; color: #0f172a; font-weight: 700;">${escapeHtml(
-                    dueSummary
-                  )}</p>
-                  <span style="display: inline-block; padding: 5px 10px; border-radius: 999px; background: ${dueBadgeBg}; color: ${dueBadgeColor}; font-size: 12px; font-weight: 700;">
-                    ${escapeHtml(dueStatusSummary)}
-                  </span>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 0;">
-                <div style="border: 1px solid ${statusCardBorder}; background: ${statusCardBg}; border-radius: 12px; padding: 12px 14px;">
-                  <p style="margin: 0; font-size: 13px; color: #334155;">
-                    Caso já tenha efetuado o pagamento, desconsidere este aviso. Se precisar de suporte, responda este e-mail.
-                  </p>
-                </div>
-              </td>
-            </tr>
-          </table>
+                  )}</strong>.
+                </p>
 
-          ${htmlMessageSection}
-          ${pixSection}
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse;">
-            <tr>
-              <td style="padding-top: 12px; border-top: 1px solid #e2e8f0;">
-                <p style="margin: 0; font-size: 12px; color: #64748b;">${escapeHtml(
-                  organizationName
-                )} • Emitido em ${escapeHtml(todayLabel)}</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden;">
+                  <tr>
+                    <td style="padding: 12px 14px; width: 40%; border-bottom: 1px solid #e5e7eb; font-size: 12px; color: #64748b;">Cliente</td>
+                    <td style="padding: 12px 14px; border-bottom: 1px solid #e5e7eb; font-size: 14px; font-weight: 600; color: #0f172a;">${escapeHtml(
+                      studentName
+                    )}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px 14px; width: 40%; border-bottom: 1px solid #e5e7eb; font-size: 12px; color: #64748b;">Valor em aberto</td>
+                    <td style="padding: 12px 14px; border-bottom: 1px solid #e5e7eb; font-size: 27px; font-weight: 800; line-height: 1.2; color: #0f172a;">${escapeHtml(
+                      amountSummary
+                    )}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px 14px; width: 40%; border-bottom: 1px solid #e5e7eb; font-size: 12px; color: #64748b;">Vencimento</td>
+                    <td style="padding: 12px 14px; border-bottom: 1px solid #e5e7eb; font-size: 14px; font-weight: 600; color: #0f172a;">${escapeHtml(
+                      dueSummary
+                    )}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px 14px; width: 40%; font-size: 12px; color: #64748b;">Status</td>
+                    <td style="padding: 12px 14px;">
+                      <span style="display: inline-block; padding: 5px 10px; border-radius: 999px; background: ${dueBadgeBg}; color: ${dueBadgeColor}; font-size: 12px; font-weight: 700;">
+                        ${escapeHtml(dueStatusSummary)}
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+
+                ${htmlMessageSection}
+                ${pixSection}
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding-top: 14px; border-top: 1px solid #e5e7eb;">
+                      <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #475569;">
+                        Caso o pagamento ja tenha sido realizado, desconsidere este aviso.
+                      </p>
+                      <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: #475569;">
+                        Para suporte, responda este e-mail diretamente.
+                      </p>
+                      <p style="margin: 8px 0 0; font-size: 11px; color: #6b7280;">
+                        ${escapeHtml(organizationName)} | Emitido em ${escapeHtml(todayLabel)}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
           </table>
@@ -256,7 +351,7 @@ export function buildBillingEmailPayload(
   const plainMessage = messageParagraphs.join("\n\n").trim();
 
   const textLines = [
-    `${organizationName} - Aviso de cobrança`,
+    `${organizationName} - Aviso de cobranca`,
     `Emitido em: ${todayLabel}`,
     "",
     `Cliente: ${studentName}`,
@@ -269,12 +364,26 @@ export function buildBillingEmailPayload(
   }
   if (pixPayload) {
     textLines.push("", "PIX copia e cola:", pixPayload);
+    if (pixCopyUrl) {
+      textLines.push("Link para copiar: " + pixCopyUrl);
+    }
+  }
+
+  const attachments: BillingEmailAttachment[] = [];
+  if (pixQrCodeImage && pixQrCodeCid) {
+    attachments.push({
+      filename: `pix-qrcode.${pixQrCodeImage.fileExtension}`,
+      contentType: pixQrCodeImage.mimeType,
+      contentBase64: pixQrCodeImage.base64Content,
+      cid: pixQrCodeCid,
+    });
   }
 
   return {
     subject,
     html,
     text: textLines.join("\n"),
+    attachments,
   };
 }
 
@@ -284,6 +393,16 @@ async function sendWithResend(args: {
   to: string;
   email: BuiltBillingEmailPayload;
 }): Promise<{ id: string | null }> {
+  const resendAttachments =
+    args.email.attachments.length > 0
+      ? args.email.attachments.map((attachment) => ({
+          filename: attachment.filename,
+          content: attachment.contentBase64,
+          content_type: attachment.contentType,
+          ...(attachment.cid ? { content_id: attachment.cid } : {}),
+        }))
+      : undefined;
+
   const resendResponse = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -296,6 +415,7 @@ async function sendWithResend(args: {
       subject: args.email.subject,
       html: args.email.html,
       text: args.email.text,
+      attachments: resendAttachments,
     }),
   });
 
@@ -318,7 +438,7 @@ async function sendWithSmtp(args: {
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
   if (!smtpUser || !smtpPass) {
-    throw new Error("SMTP_USER e SMTP_PASS são obrigatórios para envio SMTP.");
+    throw new Error("SMTP_USER e SMTP_PASS sao obrigatorios para envio SMTP.");
   }
 
   const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
@@ -347,6 +467,13 @@ async function sendWithSmtp(args: {
     subject: args.email.subject,
     html: args.email.html,
     text: args.email.text,
+    attachments: args.email.attachments.map((attachment) => ({
+      filename: attachment.filename,
+      content: attachment.contentBase64,
+      encoding: "base64",
+      contentType: attachment.contentType,
+      cid: attachment.cid,
+    })),
   });
 
   return { id: info.messageId || null };
